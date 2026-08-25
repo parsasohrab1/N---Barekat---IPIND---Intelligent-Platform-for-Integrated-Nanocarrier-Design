@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.csv
+.env
+.DS_Store
+
+# Patent-sensitive material: plaintext must never be committed.
+# Only the encrypted .gpg file under docs/patent/ is tracked.
+docs/patent/*.md
+!docs/patent/README.md
