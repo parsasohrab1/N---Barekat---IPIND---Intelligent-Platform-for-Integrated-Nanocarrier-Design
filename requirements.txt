@@ -4,3 +4,5 @@ rdkit-pypi
 scikit-learn
 torch
 torch-geometric
+shap
+requests

@@ -5,6 +5,8 @@ venv/
 *.csv
 .env
 .DS_Store
+.pytest_cache/
+*.egg-info/
 
 # Patent-sensitive material: plaintext must never be committed.
 # Only the encrypted .gpg file under docs/patent/ is tracked.

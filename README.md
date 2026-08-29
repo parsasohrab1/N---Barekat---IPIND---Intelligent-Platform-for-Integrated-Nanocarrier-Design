@@ -34,3 +34,12 @@ tests/                    تست‌ها
 pip install -r requirements.txt
 python -m ipind2.data_generation.synthetic_data_generator
 ```
+
+## توسعه و تست
+
+واحدهای ۷ تا ۱۰ (تفسیرپذیری، رابط زبان طبیعی، یکپارچگی آزمایشگاه خودکار، بنچمارک مستمر) پیاده‌سازی واقعی و تست‌شده دارند:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
