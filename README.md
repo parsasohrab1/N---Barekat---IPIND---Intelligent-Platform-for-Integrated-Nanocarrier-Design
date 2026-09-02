@@ -1,4 +1,4 @@
-# IPIND² — Intelligent Platform for Integrated Nanocarrier Design
+# IPIND — Intelligent Platform for Integrated Nanocarrier Design
 
 پلتفرم یکپارچه طراحی هوشمند نانوحامل‌های دارویی: ترکیب مدل‌های مولد عمیق، شبکه‌های عصبی گرافی، یادگیری تقویتی چندهدفه و شبیه‌سازی دینامیک مولکولی برای کوتاه‌سازی چرخه طراحی نانوحامل از ۳-۵ سال به ۶-۱۲ ماه.
 
