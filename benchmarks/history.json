@@ -1,0 +1,114 @@
+[
+  {
+    "dataset": "phys_size_nm@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 3.2287365909482606,
+    "r2": 0.9811326682780388,
+    "timestamp": "2026-10-03T16:05:18.145430+00:00"
+  },
+  {
+    "dataset": "phys_zeta_potential_mV@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 1.576532325456311,
+    "r2": 0.9762827630287738,
+    "timestamp": "2026-10-03T16:05:19.227197+00:00"
+  },
+  {
+    "dataset": "phys_pdi@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 0.008812590638509258,
+    "r2": 0.9195974221121512,
+    "timestamp": "2026-10-03T16:05:20.287500+00:00"
+  },
+  {
+    "dataset": "phys_colloidal_stability_hours@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 3.156199243527091,
+    "r2": 0.9017623035354438,
+    "timestamp": "2026-10-03T16:05:21.355250+00:00"
+  },
+  {
+    "dataset": "phys_drug_loading_efficiency_percent@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 2.186492561167182,
+    "r2": 0.8620034245047731,
+    "timestamp": "2026-10-03T16:05:22.474795+00:00"
+  },
+  {
+    "dataset": "phys_drug_loading_content_percent@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 0.3316372442830045,
+    "r2": 0.7884811267478717,
+    "timestamp": "2026-10-03T16:05:23.620201+00:00"
+  },
+  {
+    "dataset": "phys_release_rate_constant@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 0.010708016901733022,
+    "r2": 0.9664038482796978,
+    "timestamp": "2026-10-03T16:05:24.648147+00:00"
+  },
+  {
+    "dataset": "bio_cytotoxicity_ic50_ug_ml@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 3.126140283962322,
+    "r2": 0.9717009673264917,
+    "timestamp": "2026-10-03T16:05:26.298083+00:00"
+  },
+  {
+    "dataset": "bio_cytotoxicity_ic50_hepg2_ug_ml@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 3.1522222824359325,
+    "r2": 0.98136420585181,
+    "timestamp": "2026-10-03T16:05:27.863010+00:00"
+  },
+  {
+    "dataset": "bio_cytotoxicity_ic50_hela_ug_ml@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 3.2379231490876825,
+    "r2": 0.9582161108618845,
+    "timestamp": "2026-10-03T16:05:29.541382+00:00"
+  },
+  {
+    "dataset": "bio_cellular_uptake_efficiency_percent@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 2.331283547687003,
+    "r2": 0.9311599038482442,
+    "timestamp": "2026-10-03T16:05:31.178409+00:00"
+  },
+  {
+    "dataset": "bio_serum_protein_binding_percent@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 2.1151242078132406,
+    "r2": 0.9550142128374643,
+    "timestamp": "2026-10-03T16:05:32.900734+00:00"
+  },
+  {
+    "dataset": "bio_circulation_half_life_hours@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 0.2548290446887767,
+    "r2": 0.9575197737434841,
+    "timestamp": "2026-10-03T16:05:34.677720+00:00"
+  },
+  {
+    "dataset": "bio_tumor_to_background_ratio@1b268e26",
+    "model_version": "20261003-release-e99cbd64",
+    "n_samples": 500,
+    "rmse": 0.06742035083638247,
+    "r2": 0.8785682084393952,
+    "timestamp": "2026-10-03T16:05:36.472144+00:00"
+  }
+]

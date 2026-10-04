@@ -2,6 +2,13 @@
 
 from .datasets import REGISTRY, ReferenceDataset, list_reference_datasets, load_reference_dataset
 from .metrics import r_squared, rmse
+from .release import (
+    ReleaseReport,
+    benchmark_release,
+    dataset_fingerprint,
+    frozen_reference_dataset,
+    load_published_results,
+)
 from .runner import (
     BenchmarkHistory,
     BenchmarkResult,
@@ -24,4 +31,9 @@ __all__ = [
     "run_benchmark",
     "check_regression",
     "assert_no_regression",
+    "ReleaseReport",
+    "benchmark_release",
+    "dataset_fingerprint",
+    "frozen_reference_dataset",
+    "load_published_results",
 ]

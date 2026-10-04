@@ -2,6 +2,7 @@
 
 from .confidence import ConfidenceScore, batch_ensemble_confidence, ensemble_confidence
 from .shap_explainer import ExplanationResult, FeatureAttribution, SHAPExplainer, explain_multi_output
+from .surrogate import SurrogateExplainer, SurrogateExplanation
 
 __all__ = [
     "ConfidenceScore",
@@ -11,6 +12,8 @@ __all__ = [
     "FeatureAttribution",
     "SHAPExplainer",
     "explain_multi_output",
+    "SurrogateExplainer",
+    "SurrogateExplanation",
 ]
 
 

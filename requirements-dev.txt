@@ -1,2 +1,4 @@
 -r requirements.txt
-pytest
+pytest>=7.4
+pytest-cov>=4.1
+httpx>=0.26

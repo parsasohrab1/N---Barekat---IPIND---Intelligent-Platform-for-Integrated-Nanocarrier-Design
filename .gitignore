@@ -12,3 +12,9 @@ venv/
 # Only the encrypted .gpg file under docs/patent/ is tracked.
 docs/patent/*.md
 !docs/patent/README.md
+
+models/
+*.db
+benchmarks/ci_history.json
+deploy/certs/
+.env

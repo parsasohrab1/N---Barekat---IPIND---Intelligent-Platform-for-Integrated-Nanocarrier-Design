@@ -1,0 +1,110 @@
+{
+  "hardware": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python": "3.10.1",
+    "cpu_count": 8,
+    "torch": "2.1.1+cpu",
+    "cuda": false
+  },
+  "model_version": "20261003-release-e99cbd64",
+  "NFR-04": {
+    "n": 100000,
+    "seconds": 60.9,
+    "limit_seconds": 600,
+    "validity_rate": 1.0,
+    "passed": true
+  },
+  "NFR-05": {
+    "ms_per_structure": 5.36,
+    "limit_ms": 100,
+    "ensemble_size": 3,
+    "passed": true
+  },
+  "NFR-06": {
+    "candidates_evaluated": 1981,
+    "seconds": 19.5,
+    "limit_seconds": 3600,
+    "passed": true,
+    "stage_seconds": {
+      "parse": 0.0,
+      "generate": 0.72,
+      "optimize": 9.836,
+      "pareto_select": 4.849,
+      "validate": 0.0,
+      "finalize": 4.056
+    },
+    "final_candidates": 5
+  },
+  "NFR-08": {
+    "theoretical_space": 2540780,
+    "required": 1000000,
+    "passed": true
+  },
+  "NFR-10": {
+    "n_total": 1000000,
+    "n_combinatorial": 1000000,
+    "n_public": 0,
+    "seconds": 556.2,
+    "meets_size": true,
+    "meets_public_source": false,
+    "note": "مبدأ ساختارها ترکیبیاتی است؛ شرط «پایگاه عمومی» فقط با فایل‌های PubChem/ZINC برآورده می‌شود."
+  },
+  "accuracy_holdout": {
+    "NFR-01": {
+      "target": "phys_size_nm",
+      "metric": "rmse",
+      "value": 3.2723454411016286,
+      "threshold": 5.0,
+      "passed": true
+    },
+    "NFR-02": {
+      "target": "phys_zeta_potential_mV",
+      "metric": "rmse",
+      "value": 1.5863678821990463,
+      "threshold": 2.0,
+      "passed": true
+    },
+    "NFR-03": {
+      "target": "phys_drug_loading_efficiency_percent",
+      "metric": "r2",
+      "value": 0.8677548025855395,
+      "threshold": 0.85,
+      "passed": true
+    },
+    "FR-03": {
+      "metric": "r2",
+      "threshold": 0.85,
+      "per_target": {
+        "bio_cytotoxicity_ic50_ug_ml": 0.9697879706937311,
+        "bio_cytotoxicity_ic50_hepg2_ug_ml": 0.9793170492179896,
+        "bio_cytotoxicity_ic50_hela_ug_ml": 0.9608711783697728,
+        "bio_cellular_uptake_efficiency_percent": 0.9307899382535574,
+        "bio_serum_protein_binding_percent": 0.9464297363861833,
+        "bio_circulation_half_life_hours": 0.899478418016973,
+        "bio_tumor_to_background_ratio": 0.8689851718038376
+      },
+      "passed": true
+    }
+  },
+  "noise_ceiling_r2": {
+    "phys_size_nm": 0.9813264850883904,
+    "phys_zeta_potential_mV": 0.9822970189582573,
+    "phys_pdi": 0.9244398236320422,
+    "phys_colloidal_stability_hours": 0.9224459827141239,
+    "phys_drug_loading_efficiency_percent": 0.8787569568817168,
+    "phys_drug_loading_content_percent": 0.8063389942054985,
+    "phys_release_rate_constant": 0.963906424839853,
+    "bio_cytotoxicity_ic50_ug_ml": 0.9739066114409369,
+    "bio_cytotoxicity_ic50_hepg2_ug_ml": 0.9821858813599051,
+    "bio_cytotoxicity_ic50_hela_ug_ml": 0.9655183334703419,
+    "bio_cellular_uptake_efficiency_percent": 0.9407507241501541,
+    "bio_serum_protein_binding_percent": 0.9531006979094989,
+    "bio_circulation_half_life_hours": 0.9355037824484331,
+    "bio_tumor_to_background_ratio": 0.8824519855545893
+  },
+  "benchmark_gate": {
+    "passed": true,
+    "nfr_violations": [],
+    "markdown": "| دیتاست/هدف | RMSE | R² | تغییر نسبت به نسخه قبل |\n|---|---|---|---|\n| phys_size_nm@1b268e26 | 3.2287 | 0.9811 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| phys_zeta_potential_mV@1b268e26 | 1.5765 | 0.9763 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| phys_pdi@1b268e26 | 0.0088 | 0.9196 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| phys_colloidal_stability_hours@1b268e26 | 3.1562 | 0.9018 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| phys_drug_loading_efficiency_percent@1b268e26 | 2.1865 | 0.8620 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| phys_drug_loading_content_percent@1b268e26 | 0.3316 | 0.7885 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| phys_release_rate_constant@1b268e26 | 0.0107 | 0.9664 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| bio_cytotoxicity_ic50_ug_ml@1b268e26 | 3.1261 | 0.9717 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| bio_cytotoxicity_ic50_hepg2_ug_ml@1b268e26 | 3.1522 | 0.9814 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| bio_cytotoxicity_ic50_hela_ug_ml@1b268e26 | 3.2379 | 0.9582 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| bio_cellular_uptake_efficiency_percent@1b268e26 | 2.3313 | 0.9312 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| bio_serum_protein_binding_percent@1b268e26 | 2.1151 | 0.9550 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| bio_circulation_half_life_hours@1b268e26 | 0.2548 | 0.9575 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |\n| bio_tumor_to_background_ratio@1b268e26 | 0.0674 | 0.8786 | اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست) |"
+  }
+}

@@ -1,0 +1,25 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q --cov=ipind2 --cov-report=term-missing:skip-covered
+  model-gate:
+    # دروازه انتشار مدل (FR-12): آموزش smoke برای سالم‌بودن خط لوله؛ برای انتشار واقعی از
+    # پروفایل standard/full روی runner دارای منابع کافی استفاده کنید.
+    needs: test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r requirements-dev.txt && pip install -e .
+      - run: ipind2-train --profile smoke --out models/ci
+      - run: ipind2-benchmark --model-dir models/ci --history benchmarks/ci_history.json --no-record || echo "smoke models are expected to fail the NFR gate"

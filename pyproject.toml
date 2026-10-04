@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ipind2"
+version = "0.5.0"
+description = "IPIND² — Intelligent Platform for Integrated Nanocarrier Design"
+readme = "README.md"
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+
+[project.scripts]
+ipind2-train = "ipind2.training.train:main"
+ipind2-validate = "ipind2.training.validate:main"
+ipind2-benchmark = "ipind2.benchmarking.release:main"
+ipind2-manage = "ipind2.api.manage:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }

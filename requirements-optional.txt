@@ -1,0 +1,7 @@
+# موتورهای MD و کش — فقط برای استقرار تولید (نگاه کنید به docs/OPERATIONS.md)
+redis>=5.0
+psycopg2-binary>=2.9
+openmm>=8.1
+openmmforcefields>=0.12
+openff-toolkit>=0.14
+MDAnalysis>=2.7

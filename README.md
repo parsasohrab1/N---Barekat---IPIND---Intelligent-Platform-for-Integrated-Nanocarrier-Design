@@ -28,18 +28,40 @@ src/ipind2/
 tests/                    تست‌ها
 ```
 
+## وضعیت
+
+| | |
+|---|---|
+| **TRL (محاسبه‌شده از شواهد)** | **۴** — TRL ۵ نیازمند داده/MD/استقرار واقعی است؛ [`docs/TRL_ASSESSMENT.md`](docs/TRL_ASSESSMENT.md) دقیقاً می‌گوید چه چیزی کم است |
+| واحدهای ۱–۱۰ | پیاده‌سازی و آزموده‌شده (۳۲۷ تست)؛ MD واقعی فقط آداپتور |
+| دقت | روی **داده سنتتیک** — [`docs/MODEL_VALIDATION.md`](docs/MODEL_VALIDATION.md) |
+| معماری | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · عملیات: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) · FAIR: [`docs/FAIR_MIRIBEL.md`](docs/FAIR_MIRIBEL.md) |
+
 ## شروع سریع
 
 ```bash
-pip install -r requirements.txt
-python -m ipind2.data_generation.synthetic_data_generator
+pip install -r requirements-dev.txt
+python -m ipind2.training.train --profile smoke --out models/dev          # ~۳۰ ثانیه؛ برای دقت واقعی: --profile release
+export IPIND_JWT_SECRET="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')"
+export IPIND_ENCRYPTION_KEY="$(python -c 'from ipind2.security import generate_key;print(generate_key())')"
+export IPIND_MODEL_DIR=models/dev
+python -m ipind2.api.manage create-user admin --role admin                 # سپس تأیید TOTP (docs/OPERATIONS.md)
+python -m ipind2.api.manage serve                                          # داشبورد: http://127.0.0.1:8000
 ```
 
-## توسعه و تست
+استفاده برنامه‌نویسی:
 
-واحدهای ۷ تا ۱۰ (تفسیرپذیری، رابط زبان طبیعی، یکپارچگی آزمایشگاه خودکار، بنچمارک مستمر) پیاده‌سازی واقعی و تست‌شده دارند:
+```python
+from ipind2.training import ModelBundle
+from ipind2.pipeline import DesignPipeline
+result = DesignPipeline(ModelBundle.load("models/dev")).design("نانوحامل لیپیدی برای تومور، اندازه بین ۸۰ تا ۱۲۰ نانومتر")
+print(result.final_candidates[0]["predictions"], result.warnings)
+```
+
+## آزمون
 
 ```bash
-pip install -r requirements-dev.txt
-pytest
+pytest -q     # ~۸ دقیقه روی CPU؛ مدل‌های smoke یک‌بار آموزش می‌بینند
 ```
+
+> پیام‌های `joblib ... wmic` و گاه `access violation` (faulthandler) روی Windows بی‌ضررند و بر نتایج اثر ندارند.

@@ -1,8 +1,20 @@
-numpy
-pandas
-rdkit-pypi
-scikit-learn
-torch
-torch-geometric
-shap
-requests
+# هسته علمی
+numpy>=1.24,<2
+pandas>=2.0
+scikit-learn>=1.3
+scipy>=1.10
+torch>=2.1
+rdkit>=2023.9
+shap>=0.44
+pyarrow>=14
+# سرویس و داده
+fastapi>=0.110
+uvicorn>=0.27
+pydantic>=2.5
+sqlalchemy>=2.0
+requests>=2.31
+# امنیت
+PyJWT>=2.8
+bcrypt>=4.0
+cryptography>=42
+pyotp>=2.9
