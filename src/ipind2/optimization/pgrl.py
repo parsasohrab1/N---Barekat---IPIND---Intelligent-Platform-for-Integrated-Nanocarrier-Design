@@ -7,7 +7,6 @@ policy, evaluated with the objective function, and the policy is updated with RE
 
 The "Pareto-guided" reward is a combination of two components:
 1. Rank reward: ``1/Pareto rank`` among the batch + archive (structures on the front get the highest reward);
-   ).
 2. Chebyshev scalarization with random Dirichlet weights in each iteration, so the policy does not converge to a single front
    point and the whole front is covered.
 
