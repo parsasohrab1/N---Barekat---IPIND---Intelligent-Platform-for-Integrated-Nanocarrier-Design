@@ -116,7 +116,7 @@ def assess(
     pub = _load(public_benchmark_path)
     if pub:
         summary = pub.get("summary", {})
-        gnn = summary.get("ipind2-gnn", {}).get("r2_mean")
+        gnn = summary.get("ipind2-gnn+morgan", summary.get("ipind2-gnn", {})).get("r2_mean")
         forest = summary.get("random-forest (Morgan)", {}).get("r2_mean")
         ok = gnn is not None and forest is not None and gnn >= forest
         evidence = (f"{pub.get('dataset')}: platform R² {gnn:.3f} vs. RandomForest+Morgan baseline {forest:.3f}"

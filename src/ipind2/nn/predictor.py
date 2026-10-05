@@ -23,6 +23,7 @@ from ..featurization import (
     MolGraph,
     batch_graphs,
     extended_vector,
+    morgan_counts,
     smiles_to_graph,
 )
 from .training import TargetScaler, TrainingHistory, train_regressor
@@ -31,12 +32,15 @@ from .training import TargetScaler, TrainingHistory, train_regressor
 class GraphEncoder:
     """Builds the graph + global feature vector of each molecule once and returns batches."""
 
-    def __init__(self, max_atoms: int = 96):
+    def __init__(self, max_atoms: int = 96, fp_bits: int = 0, fp_radius: int = 2):
         self.max_atoms = max_atoms
-        self.global_mean = np.zeros(EXTENDED_DIM, dtype=np.float32)
-        self.global_std = np.ones(EXTENDED_DIM, dtype=np.float32)
+        self.fp_bits = fp_bits  # 0 = no Morgan fingerprint (default; compatible with earlier models)
+        self.fp_radius = fp_radius
+        self.global_dim = EXTENDED_DIM + fp_bits
+        self.global_mean = np.zeros(self.global_dim, dtype=np.float32)
+        self.global_std = np.ones(self.global_dim, dtype=np.float32)
         self.graphs: List[MolGraph] = []
-        self.globals: np.ndarray = np.zeros((0, EXTENDED_DIM), dtype=np.float32)
+        self.globals: np.ndarray = np.zeros((0, self.global_dim), dtype=np.float32)
 
     def fit_globals(self, matrix: np.ndarray) -> None:
         self.global_mean = matrix.mean(axis=0).astype(np.float32)
@@ -51,12 +55,14 @@ class GraphEncoder:
             vector = extended_vector(smiles)
             if graph is None or vector is None:
                 continue
+            if self.fp_bits:
+                vector = np.concatenate([vector, morgan_counts(smiles, self.fp_bits, self.fp_radius)])
             graphs.append(graph)
             rows.append(vector)
             kept.append(i)
         self.graphs = graphs
         self.globals = (
-            np.vstack(rows) if rows else np.zeros((0, EXTENDED_DIM), dtype=np.float32)
+            np.vstack(rows) if rows else np.zeros((0, self.global_dim), dtype=np.float32)
         )
         return kept
 
@@ -74,13 +80,15 @@ class GraphEncoder:
     def state_dict(self) -> Dict:
         return {
             "max_atoms": self.max_atoms,
+            "fp_bits": self.fp_bits,
+            "fp_radius": self.fp_radius,
             "global_mean": self.global_mean.tolist(),
             "global_std": self.global_std.tolist(),
         }
 
     @classmethod
     def from_state_dict(cls, state: Dict) -> "GraphEncoder":
-        encoder = cls(max_atoms=state["max_atoms"])
+        encoder = cls(max_atoms=state["max_atoms"], fp_bits=state.get("fp_bits", 0), fp_radius=state.get("fp_radius", 2))
         encoder.global_mean = np.asarray(state["global_mean"], dtype=np.float32)
         encoder.global_std = np.asarray(state["global_std"], dtype=np.float32)
         return encoder
@@ -107,6 +115,7 @@ class EnsemblePropertyPredictor:
         n_ensemble: int = 3,
         model_kwargs: Optional[Dict] = None,
         max_atoms: int = 96,
+        fp_bits: int = 0,
     ):
         if architecture not in self.MODEL_FACTORIES:
             raise ValueError(f"Unknown architecture: {architecture!r}")
@@ -116,7 +125,9 @@ class EnsemblePropertyPredictor:
         self.architecture = architecture
         self.n_ensemble = n_ensemble
         self.model_kwargs = dict(model_kwargs or {})
-        self.encoder = GraphEncoder(max_atoms=max_atoms)
+        if fp_bits:
+            self.model_kwargs["global_dim"] = EXTENDED_DIM + fp_bits
+        self.encoder = GraphEncoder(max_atoms=max_atoms, fp_bits=fp_bits)
         self.scaler = TargetScaler()
         self.models: List[nn.Module] = []
         self.histories: List[TrainingHistory] = []
@@ -347,6 +358,7 @@ class EnsemblePropertyPredictor:
             n_ensemble=meta["n_ensemble"],
             model_kwargs=meta["model_kwargs"],
             max_atoms=meta["encoder"]["max_atoms"],
+            fp_bits=meta["encoder"].get("fp_bits", 0),
         )
         predictor.scaler = TargetScaler.from_state_dict(meta["scaler"])
         predictor.encoder = GraphEncoder.from_state_dict(meta["encoder"])

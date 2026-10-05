@@ -194,6 +194,22 @@ def extended_matrix(smiles_list: Sequence[str]) -> Tuple[np.ndarray, List[int]]:
     return np.vstack(rows), kept
 
 
+def morgan_counts(smiles_or_mol, n_bits: int = 512, radius: int = 2) -> Optional[np.ndarray]:
+    """
+    Count-based Morgan fingerprint (log1p) of fixed length ``n_bits``; ``None`` for invalid input.
+
+    Supplies the substructure information the global features (descriptors + functional groups) lack —
+    on similar experimental lipids (all amine-lipids) that difference is decisive.
+    """
+    from rdkit.Chem import rdFingerprintGenerator
+
+    mol = smiles_or_mol if isinstance(smiles_or_mol, Chem.Mol) else parse_smiles(smiles_or_mol)
+    if mol is None:
+        return None
+    generator = rdFingerprintGenerator.GetMorganGenerator(radius=radius, fpSize=n_bits)
+    return np.log1p(generator.GetCountFingerprintAsNumPy(mol).astype(np.float32))
+
+
 def descriptor_vector(smiles_or_mol) -> Optional[np.ndarray]:
     """Descriptor vector in the order of ``DESCRIPTOR_NAMES``; ``None`` for invalid input."""
     mol = smiles_or_mol if isinstance(smiles_or_mol, Chem.Mol) else parse_smiles(smiles_or_mol)

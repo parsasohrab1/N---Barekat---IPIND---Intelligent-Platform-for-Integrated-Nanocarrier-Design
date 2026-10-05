@@ -223,6 +223,59 @@ class TestBiologicalPredictor:
         assert np.allclose(model.predict(smiles).to_numpy(), loaded.predict(smiles).to_numpy(), atol=1e-4)
 
 
+class TestMorganFingerprintFeatures:
+    SMILES = ["CCCCCCCCCCCCCCCC[N+](C)(C)C", "OCCOCCOCCO", "CCCCCCCCCCCCNC(=O)C(CCCCCOC(=O)CCCC)NCCCN"]
+
+    def test_morgan_counts_shape_determinism_and_invalid(self):
+        from ipind2.featurization import morgan_counts
+
+        a, b = morgan_counts(self.SMILES[0], 256), morgan_counts(self.SMILES[0], 256)
+        assert a.shape == (256,) and np.array_equal(a, b) and a.max() > 0
+        assert not np.array_equal(a, morgan_counts(self.SMILES[1], 256))
+        assert morgan_counts("bad(((", 256) is None
+
+    def test_encoder_dimensions_follow_fp_bits(self):
+        from ipind2.nn.predictor import GraphEncoder
+
+        plain, with_fp = GraphEncoder(), GraphEncoder(fp_bits=128)
+        for encoder in (plain, with_fp):
+            encoder.prepare(self.SMILES)
+        assert plain.globals.shape[1] == EXTENDED_DIM and with_fp.globals.shape[1] == EXTENDED_DIM + 128
+        assert with_fp.batch([0, 1])[3].shape == (2, EXTENDED_DIM + 128)
+
+    def test_predictor_with_fingerprints_trains_saves_and_reloads(self, tmp_path, small_dataset):
+        smiles = small_dataset.smiles.tolist()[:80]
+        targets = small_dataset[list(PHYSICO_TARGET_COLUMNS)].to_numpy()[:80]
+        model = PhysicochemicalPredictor(n_ensemble=2, hidden_dim=16, fp_bits=64)
+        model.fit(smiles, targets, epochs=2, seed=1)
+        assert model.model_kwargs["global_dim"] == EXTENDED_DIM + 64
+        model.save(str(tmp_path / "m"))
+        loaded = PhysicochemicalPredictor.load(str(tmp_path / "m"))
+        assert loaded.encoder.fp_bits == 64
+        assert np.allclose(model.predict(smiles[:5]).to_numpy(), loaded.predict(smiles[:5]).to_numpy(), atol=1e-4)
+
+    def test_models_saved_before_fingerprints_still_load(self, physico_model, tmp_path):
+        """Backward compatibility: an old meta.json without fp_bits must load as fp_bits=0."""
+        import json
+
+        model, _, test = physico_model
+        model.save(str(tmp_path / "old"))
+        meta_path = tmp_path / "old" / "meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta["encoder"].pop("fp_bits"), meta["encoder"].pop("fp_radius")
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        loaded = PhysicochemicalPredictor.load(str(tmp_path / "old"))
+        assert loaded.encoder.fp_bits == 0
+        smiles = test.smiles.tolist()[:4]
+        assert np.allclose(model.predict(smiles).to_numpy(), loaded.predict(smiles).to_numpy(), atol=1e-4)
+
+    def test_biological_predictor_accepts_fingerprints(self, small_dataset):
+        smiles = small_dataset.smiles.tolist()[:60]
+        model = BiologicalPredictor(n_ensemble=1, hidden_dim=16, fp_bits=32)
+        model.fit(smiles, small_dataset[list(BIO_TARGET_COLUMNS)].to_numpy()[:60], epochs=1, seed=0)
+        assert np.all(np.isfinite(model.predict(smiles[:3]).to_numpy()))
+
+
 class TestConcurrency:
     def test_parallel_predictions_match_serial(self, physico_model):
         """Potential bug: GraphEncoder has per-call state; the lock must keep concurrent results correct."""

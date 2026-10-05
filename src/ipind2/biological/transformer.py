@@ -89,6 +89,7 @@ class BiologicalPredictor(EnsemblePropertyPredictor):
         n_ensemble: int = 3,
         hidden_dim: int = 64,
         max_atoms: int = 96,
+        fp_bits: int = 0,
     ):
         super().__init__(
             target_names,
@@ -96,4 +97,5 @@ class BiologicalPredictor(EnsemblePropertyPredictor):
             n_ensemble=n_ensemble,
             model_kwargs={"hidden_dim": hidden_dim},
             max_atoms=max_atoms,
+            fp_bits=fp_bits,
         )

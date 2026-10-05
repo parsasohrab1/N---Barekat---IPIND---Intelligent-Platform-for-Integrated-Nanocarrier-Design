@@ -113,10 +113,10 @@
   },
   {
     "dataset": "lantern-hela",
-    "model_version": "ipind2-gnn",
+    "model_version": "ipind2-gnn+morgan2048",
     "n_samples": 1100,
-    "rmse": 2.746320599492442,
-    "r2": 0.30433946840865983,
-    "timestamp": "2026-10-05T06:12:26.049861+00:00"
+    "rmse": 2.3452702746683194,
+    "r2": 0.5073711822930804,
+    "timestamp": "2026-10-05T06:37:20.719936+00:00"
   }
 ]

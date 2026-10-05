@@ -80,6 +80,7 @@ class PhysicochemicalPredictor(EnsemblePropertyPredictor):
         hidden_dim: int = 64,
         n_layers: int = 3,
         max_atoms: int = 96,
+        fp_bits: int = 0,
     ):
         super().__init__(
             target_names,
@@ -87,4 +88,5 @@ class PhysicochemicalPredictor(EnsemblePropertyPredictor):
             n_ensemble=n_ensemble,
             model_kwargs={"hidden_dim": hidden_dim, "n_layers": n_layers},
             max_atoms=max_atoms,
+            fp_bits=fp_bits,
         )

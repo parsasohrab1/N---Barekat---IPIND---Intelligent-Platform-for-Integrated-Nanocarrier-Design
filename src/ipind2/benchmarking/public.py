@@ -33,6 +33,9 @@ from .metrics import r_squared, rmse
 from .runner import BenchmarkHistory, BenchmarkResult
 
 DATASET_NAME = "lantern-hela"
+HEADLINE = "ipind2-gnn+morgan"
+FP_BITS = 2048
+FP_DROPOUT = 0.3
 PUBLISHED = {
     "citation": "LANTERN, arXiv:2507.03209",
     "mlp_morgan_expert_r2": 0.8161,
@@ -76,12 +79,12 @@ class PublicBenchmarkReport:
 
 def run_public_benchmark(
     csv_path: str,
-    seeds=(0, 1, 2),
+    seeds=(1, 2, 3, 4, 5),
     test_fraction: float = 0.2,
     n_ensemble: int = 3,
     epochs: int = 80,
     history: Optional[BenchmarkHistory] = None,
-    model_version: str = "ipind2-gnn",
+    model_version: str = "ipind2-gnn+morgan2048",
 ) -> PublicBenchmarkReport:
     """Three models on several random splits: constant mean (R²≈0), RandomForest+Morgan, and the platform GNN."""
     frame = load_reference_dataset(DATASET_NAME, csv_path).rename(columns={"SMILES": "smiles"})
@@ -93,7 +96,8 @@ def run_public_benchmark(
         raise ValueError("Invalid SMILES in dataset")
 
     per_model: Dict[str, Dict[str, List[float]]] = {
-        name: {"rmse": [], "r2": []} for name in ("mean-baseline", "random-forest (Morgan)", "ipind2-gnn")
+        name: {"rmse": [], "r2": []}
+        for name in ("mean-baseline", "random-forest (Morgan)", "ipind2-gnn (no fingerprint)", HEADLINE)
     }
     for seed in seeds:
         order = np.random.default_rng(seed).permutation(len(smiles))
@@ -102,18 +106,27 @@ def run_public_benchmark(
 
         baseline = np.full(len(test), target[train].mean())
         forest = RandomForestRegressor(n_estimators=300, random_state=seed, n_jobs=-1).fit(fingerprints[train], target[train])
-        gnn = EnsemblePropertyPredictor(["Target"], "gnn", n_ensemble=n_ensemble, model_kwargs={"hidden_dim": 64}, max_atoms=96)
-        gnn.fit([smiles[i] for i in train], target[train, None], epochs=epochs, seed=seed)
-        gnn_pred = gnn.predict([smiles[i] for i in test])["Target"].to_numpy()
+        train_smiles, test_smiles = [smiles[i] for i in train], [smiles[i] for i in test]
+        plain = EnsemblePropertyPredictor(["Target"], "gnn", n_ensemble=n_ensemble, model_kwargs={"hidden_dim": 64}, max_atoms=96)
+        plain.fit(train_smiles, target[train, None], epochs=epochs, seed=seed)
+        plain_pred = plain.predict(test_smiles)["Target"].to_numpy()
+        # Config chosen on the seed-0 validation split (not the test set); see docs/MODEL_VALIDATION.md
+        tuned = EnsemblePropertyPredictor(
+            ["Target"], "gnn", n_ensemble=n_ensemble, max_atoms=96, fp_bits=FP_BITS,
+            model_kwargs={"hidden_dim": 64, "dropout": FP_DROPOUT},
+        )
+        tuned.fit(train_smiles, target[train, None], epochs=epochs, seed=seed)
+        gnn_pred = tuned.predict(test_smiles)["Target"].to_numpy()
 
         for name, prediction in (
-            ("mean-baseline", baseline), ("random-forest (Morgan)", forest.predict(fingerprints[test])), ("ipind2-gnn", gnn_pred),
+            ("mean-baseline", baseline), ("random-forest (Morgan)", forest.predict(fingerprints[test])),
+            ("ipind2-gnn (no fingerprint)", plain_pred), (HEADLINE, gnn_pred),
         ):
             per_model[name]["rmse"].append(rmse(target[test], prediction))
             per_model[name]["r2"].append(r_squared(target[test], prediction))
 
     if history is not None:
-        gnn_scores = per_model["ipind2-gnn"]
+        gnn_scores = per_model[HEADLINE]
         history.append(
             BenchmarkResult(
                 dataset=DATASET_NAME, model_version=model_version, n_samples=len(smiles),
@@ -135,7 +148,7 @@ def main() -> None:
     print(report.to_markdown())
     Path(args.out).write_text(
         json.dumps({"dataset": report.dataset, "n": report.n_samples, "seeds": report.seeds,
-                    "summary": report.summary(), "published": PUBLISHED}, ensure_ascii=False, indent=2),
+                    "summary": report.summary(), "per_seed": report.per_model, "published": PUBLISHED}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 

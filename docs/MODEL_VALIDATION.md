@@ -31,23 +31,35 @@ PDI (R² 0.92) and loading content (0.79; ceiling 0.81) are not among the R² > 
 
 The NFR-06 measurement **does not include MD** (real MD has not been run).
 
-## Benchmark on real public data (important negative finding)
+## Benchmark on real public data
 
-Dataset: LANTERN/AGILE HeLa — 1100 ionizable lipids with **experimental** transfection efficiency (`data/AGILE.csv`, [MIT repo](https://github.com/AsalMehradfar/LANTERN); the file is not shipped with the repo and is downloaded into `data/external/`). LNP-622 has no direct public file and LANCE is given only on request from the authors; therefore neither was run. 3 random 80/20 splits:
+Dataset: LANTERN/AGILE HeLa — 1100 ionizable lipids with **experimental** transfection efficiency (`data/AGILE.csv`, [MIT repo](https://github.com/AsalMehradfar/LANTERN); the file is not shipped with the repo, download it into `data/external/`). LNP-622 has no direct public file and LANCE is available only on request from its authors; neither was run.
+
+### Path to improvement (including the failed steps)
+
+1. **First version (no fingerprints):** R² = **0.30** — worse than RandomForest+Morgan (0.48). Negative finding: the 0.97 accuracy on synthetic data did not generalise to real data.
+2. **Fix:** count-based Morgan fingerprints (log1p) were appended to the global features (`GraphEncoder(fp_bits=...)`; default 0, so existing models and saved bundles are unchanged and still load).
+3. **Config chosen on a validation split** (20% of training, seed 0; the test set was not looked at): fp ∈ {0, 512, 1024, 2048, 4096}, dropout ∈ {0.05 … 0.5}. Validation R²: 0.26 without fingerprints → 0.47–0.54 with them; best `fp=2048, dropout=0.3` (0.54). Differences among the fingerprint configs are noise-sized; the gain comes from *having* fingerprints, not from fine tuning.
+4. **Final evaluation on 5 fresh splits** (seeds 1–5, not used for tuning), 3-member ensemble:
 
 | Model | RMSE | R² |
 |---|---|---|
-| Constant mean | 3.305 ± 0.102 | −0.008 ± 0.004 |
-| RandomForest + Morgan | 2.364 ± 0.070 | **0.482 ± 0.054** |
+| Constant mean | 3.368 ± 0.108 | −0.011 ± 0.013 |
+| RandomForest + Morgan | 2.456 ± 0.131 | 0.459 ± 0.069 |
+| Platform GNN **without** fingerprints | 2.807 ± 0.103 | 0.297 ± 0.028 |
+| **Platform GNN + Morgan(2048)** | **2.345 ± 0.116** | **0.507 ± 0.053** |
 | LANTERN paper: MLP (Morgan+Expert) | — | 0.8161 |
 | Paper: AGILE | — | 0.2655 |
-(The paper's split protocol and dataset cleaning are not the same as here; the comparison with the paper is only approximate.)
 
-(The paper's split protocol and dataset cleaning are not the same as here; the comparison with the paper is only approximate.)
+Paired over the 5 splits: GNN+Morgan beats the RandomForest on **5 of 5** splits (mean R² difference +0.049, sd 0.022, paired t-test p = 0.008) and beats the no-fingerprint GNN by about +0.21 (p = 0.004). n = 5 is small; the advantage over the RandomForest is **small but consistent**.
 
-**Honest interpretation:** This dataset does not measure the platform's own properties, but it shows that an architecture achieving R²≈0.97 on synthetic data is **weaker than a simple RandomForest baseline** on small real experimental data. Probable reasons (hypotheses, untested): 880 training samples are too few for a graph network; the platform's global features were designed for the chemistry of synthetic lipids and do not discriminate between these similar lipids; lack of substructure fingerprints. Therefore the high synthetic accuracy numbers should not be generalized to real accuracy. For this reason the R2 criterion in `trl.py` is "platform R² ≥ simple baseline" and it **is not satisfied**.
+### What is not claimed
 
-Reproduction: `python -m ipind2.benchmarking.public` (output: `docs/public_benchmark.json` and recorded in `benchmarks/history.json`).
+- It is still **far below** the 0.82 reported by the paper. The paper's split/cleaning protocol differs and we did not investigate the gap; parity with the paper is not claimed.
+- This dataset does not measure the platform's own properties (size, zeta, IC50, ...); their validity on real data remains unknown. Morgan fingerprints were only enabled in this experiment: the `release` bundle was trained without them (retraining and re-validation are needed).
+- The R2 criterion in `trl.py` is only "≥ simple RandomForest baseline" and is now met; that is a low bar.
+
+Reproduce: `python -m ipind2.benchmarking.public` (output: `docs/public_benchmark.json` with per-split results, recorded in `benchmarks/history.json`).
 
 ## Requirements without full validation
 
@@ -77,7 +89,7 @@ Under severe distribution shift (model trained on lipids, new data polymer, 30 r
 python -m ipind2.training.train --profile release --out models/v1     # ~35 minutes on CPU
 python -m ipind2.training.validate --model-dir models/v1 --out docs/validation_report.json --seed-library
 python -m ipind2.trl --tests-passed yes
-pytest -q                                                              # 327 tests
+pytest -q                                                              # 334 tests
 ```
 
 ## Trusting the tests
