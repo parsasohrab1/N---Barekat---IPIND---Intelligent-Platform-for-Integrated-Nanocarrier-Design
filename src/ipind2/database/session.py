@@ -1,4 +1,4 @@
-"""اتصال به پایگاه داده. ``IPIND_DATABASE_URL`` تعیین می‌کند (پیش‌فرض: SQLite محلی)."""
+"""Database connection. ``IPIND_DATABASE_URL`` determines it (default: local SQLite)."""
 
 import os
 from contextlib import contextmanager
@@ -18,7 +18,7 @@ def database_url() -> str:
 
 
 def make_engine(url: Optional[str] = None) -> Engine:
-    """ساخت engine؛ برای SQLite کلید خارجی (FK) را فعال و برای حافظه‌ای pool مشترک می‌کند."""
+    """Build the engine; for SQLite enables foreign keys (FK) and for in-memory shares a pool."""
     url = url or database_url()
     kwargs = {}
     if url.startswith("sqlite"):
@@ -31,7 +31,7 @@ def make_engine(url: Optional[str] = None) -> Engine:
     if url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")
-        def _enable_fk(dbapi_connection, _record):  # pragma: no cover - اتصال خام
+        def _enable_fk(dbapi_connection, _record):  # pragma: no cover - raw connection
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
@@ -40,7 +40,7 @@ def make_engine(url: Optional[str] = None) -> Engine:
 
 
 def init_db(engine: Engine) -> None:
-    """ایجاد جدول‌های موجود‌نبوده (idempotent)."""
+    """Create tables that do not exist (idempotent)."""
     Base.metadata.create_all(engine)
 
 
@@ -50,7 +50,7 @@ def make_session_factory(engine: Engine) -> sessionmaker:
 
 @contextmanager
 def session_scope(factory: sessionmaker) -> Iterator[Session]:
-    """تراکنش با commit خودکار و rollback در خطا."""
+    """Transaction with automatic commit and rollback on error."""
     session = factory()
     try:
         yield session

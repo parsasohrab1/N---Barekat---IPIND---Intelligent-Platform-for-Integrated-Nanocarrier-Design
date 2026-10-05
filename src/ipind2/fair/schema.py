@@ -1,21 +1,21 @@
 """
-شمای رکورد نانوذره منطبق بر اصول FAIR و همسو با دسته‌بندی سه‌گانه MIRIBEL (FR-13).
+Nanoparticle record schema conforming to FAIR principles and aligned with the MIRIBEL three-category classification (FR-13).
 
-MIRIBEL (Minimum Information Reporting in Bio–Nano Experimental Literature) گزارش حداقل
-اطلاعات را در سه دسته می‌خواهد: **مشخصات ماده**، **مشخصات زیستی** و **پروتکل آزمایشی**.
-فیلدهای این ماژول برداشت پروژه از آن سه دسته‌اند و باید با چک‌لیست رسمی منتشرشده
-(Faria و همکاران، Nature Nanotechnology 2018) توسط یک متخصص تطبیق داده شوند؛ بنابراین
-ادعای «همسو با MIRIBEL» است، نه «تأییدشده/منطبق رسمی» (نگاه کنید به docs/FAIR_MIRIBEL.md).
+MIRIBEL (Minimum Information Reporting in Bio–Nano Experimental Literature) requires reporting of the minimum
+information in three categories: **material characterization**, **biological characterization** and **experimental protocol**.
+The fields of this module are the project's reading of those three categories and must be reconciled with the official
+published checklist (Faria et al., Nature Nanotechnology 2018) by a specialist; therefore
+the claim is "aligned with MIRIBEL", not "certified/officially compliant" (see docs/FAIR_MIRIBEL.md).
 
-اصل بازاستفاده‌پذیری (R): هر مقدار صراحتاً ``provenance`` دارد — ``predicted`` (مدل و
-نسخه آن) یا ``measured`` (روش اندازه‌گیری) — تا پیش‌بینی هرگز با اندازه‌گیری اشتباه
-گرفته نشود؛ این برای تعامل با نهادهای تنظیم‌گر حیاتی است.
+Reusability principle (R): every value explicitly has a ``provenance`` — ``predicted`` (model and
+its version) or ``measured`` (measurement method) — so that a prediction is never mistaken for a
+measurement; this is vital for interaction with regulators.
 """
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-# دسته‌های MIRIBEL و فیلدهای لازم هر دسته
+# MIRIBEL categories and required fields of each category
 MATERIAL_FIELDS = (
     "smiles",
     "scaffold_type",
@@ -30,7 +30,7 @@ BIOLOGICAL_FIELDS = (
     "cellular_uptake_efficiency_percent",
 )
 PROTOCOL_FIELDS = (
-    "characterization_method",  # مثلاً DLS
+    "characterization_method",  # e.g., DLS
     "medium",
     "temperature_c",
     "exposure_time_h",
@@ -44,7 +44,7 @@ MIRIBEL_FIELDS = {
     "protocol": PROTOCOL_FIELDS,
 }
 
-# واحدها (مرجع QUDT) تا خروجی ماشین‌خوان و بدون ابهام باشد
+# Units (QUDT reference) so the output is machine-readable and unambiguous
 UNITS = {
     "hydrodynamic_size_nm": "http://qudt.org/vocab/unit/NanoM",
     "zeta_potential_mV": "http://qudt.org/vocab/unit/MilliV",
@@ -61,26 +61,26 @@ PROVENANCE_VALUES = ("predicted", "measured")
 
 @dataclass
 class Observation:
-    """یک مقدار همراه با منشأ."""
+    """A value together with its provenance."""
 
     value: Any
     provenance: str  # 'predicted' | 'measured'
-    method: Optional[str] = None  # روش اندازه‌گیری یا نام مدل
+    method: Optional[str] = None  # measurement method or model name
     model_version: Optional[str] = None
-    uncertainty: Optional[float] = None  # انحراف‌معیار ensemble یا خطای اندازه‌گیری
+    uncertainty: Optional[float] = None  # ensemble standard deviation or measurement error
 
     def __post_init__(self):
         if self.provenance not in PROVENANCE_VALUES:
-            raise ValueError(f"provenance باید یکی از {PROVENANCE_VALUES} باشد، نه {self.provenance!r}")
+            raise ValueError(f"provenance must be one of {PROVENANCE_VALUES}, not {self.provenance!r}")
         if self.provenance == "predicted" and not self.model_version:
-            raise ValueError("مقدار پیش‌بینی‌شده باید model_version داشته باشد (ردیابی‌پذیری)")
+            raise ValueError("A predicted value must have a model_version (traceability)")
 
 
 @dataclass
 class NanoparticleRecord:
-    """رکورد نانوذره/نانوحامل با سه دسته MIRIBEL."""
+    """Nanoparticle/nanocarrier record with the three MIRIBEL categories."""
 
-    identifier: str  # شناسه پایدار (urn:uuid:...)
+    identifier: str  # persistent identifier (urn:uuid:...)
     material: Dict[str, Observation] = field(default_factory=dict)
     biological: Dict[str, Observation] = field(default_factory=dict)
     protocol: Dict[str, Observation] = field(default_factory=dict)

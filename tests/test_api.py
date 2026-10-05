@@ -1,4 +1,4 @@
-"""تست‌های API (FR-07، FR-10، FR-11، SEC-01/04/05) با مدل‌های smoke و پایگاه داده حافظه‌ای."""
+"""API tests (FR-07, FR-10, FR-11, SEC-01/04/05) with smoke models and an in-memory database."""
 
 import copy
 import json
@@ -52,7 +52,7 @@ def _wait_for_job(client, headers, job_id, timeout=240):
         if body["status"] in ("done", "failed"):
             return body
         time.sleep(1.0)
-    raise AssertionError("کار در زمان مجاز تمام نشد")
+    raise AssertionError("The job did not finish within the allowed time")
 
 
 class TestPublicSurface:
@@ -68,8 +68,8 @@ class TestPublicSurface:
         csp = response.headers["content-security-policy"]
         nonce = csp.split("script-src 'nonce-")[1].split("'")[0]
         assert f'nonce="{nonce}"' in response.text
-        assert "http://" not in response.text and "https://" not in response.text, "منبع خارجی نباید باشد"
-        assert "innerHTML" not in response.text, "درج متن سرور فقط با textContent"
+        assert "http://" not in response.text and "https://" not in response.text, "There must be no external resource"
+        assert "innerHTML" not in response.text, "Server text must be inserted only with textContent"
         assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
 
     def test_nonce_changes_per_request(self, env):
@@ -115,7 +115,7 @@ class TestAuthFlow:
             "/auth/login",
             json={"username": "res2", "password": PASSWORD, "totp_code": pyotp.TOTP(secrets["res2"]).now()},
         )
-        assert locked.status_code == 401, "قفل باید با وجود رول‌بک exception ماندگار باشد"
+        assert locked.status_code == 401, "The lock must persist despite the exception rollback"
 
     def test_only_admin_creates_users(self, env):
         client, secrets, _ = env
@@ -144,12 +144,12 @@ class TestAuthFlow:
     def test_deactivated_user_token_stops_working(self, env):
         client, secrets, factory = env
         headers = _login(client, secrets, "view1")
-        assert client.post("/nlp/parse", json={"query": "لیپیدی"}, headers=headers).status_code == 200
+        assert client.post("/nlp/parse", json={"query": "lipid"}, headers=headers).status_code == 200
         from ipind2.database.models import User
 
         with session_scope(factory) as s:
             s.query(User).filter_by(username="view1").one().is_active = False
-        assert client.post("/nlp/parse", json={"query": "لیپیدی"}, headers=headers).status_code == 401
+        assert client.post("/nlp/parse", json={"query": "lipid"}, headers=headers).status_code == 401
 
     def test_role_comes_from_database_not_token(self, env):
         client, secrets, factory = env
@@ -158,22 +158,22 @@ class TestAuthFlow:
 
         with session_scope(factory) as s:
             s.query(User).filter_by(username="res1").one().role = "viewer"
-        assert client.post("/design", json={"query": "لیپیدی"}, headers=headers).status_code == 403
+        assert client.post("/design", json={"query": "lipid"}, headers=headers).status_code == 403
 
 
 class TestRBACAndAudit:
     def test_viewer_can_read_but_not_design(self, env):
         client, secrets, _ = env
         headers = _login(client, secrets, "view1")
-        assert client.post("/nlp/parse", json={"query": "یک نانوحامل لیپیدی"}, headers=headers).status_code == 200
-        assert client.post("/design", json={"query": "لیپیدی"}, headers=headers).status_code == 403
+        assert client.post("/nlp/parse", json={"query": "A lipid nanocarrier"}, headers=headers).status_code == 200
+        assert client.post("/design", json={"query": "lipid"}, headers=headers).status_code == 403
         assert client.post("/predict", json={"smiles": ["CCO"]}, headers=headers).status_code == 403
         assert client.post("/lab/results", json={"rows": [{"molecule_id": 1}]}, headers=headers).status_code == 403
 
     def test_audit_is_admin_only_and_records_denials(self, env):
         client, secrets, _ = env
         viewer = _login(client, secrets, "view1")
-        client.post("/design", json={"query": "لیپیدی"}, headers=viewer)
+        client.post("/design", json={"query": "lipid"}, headers=viewer)
         assert client.get("/audit", headers=viewer).status_code == 403
         entries = client.get("/audit?limit=500", headers=_login(client, secrets, "admin1")).json()
         denied = [e for e in entries if e["username"] == "view1" and e["status"] == "denied"]
@@ -191,7 +191,7 @@ class TestInputValidation:
         client, secrets, _ = env
         headers = _login(client, secrets, "res1")
         assert client.post("/design", json={"query": "q", "n_generate": 10**7}, headers=headers).status_code == 422
-        assert client.post("/design", json={"n_generate": 100}, headers=headers).status_code == 422  # بدون query/parameters
+        assert client.post("/design", json={"n_generate": 100}, headers=headers).status_code == 422  # without query/parameters
         assert client.post("/predict", json={"smiles": []}, headers=headers).status_code == 422
         assert client.post("/predict", json={"smiles": ["C" * 5000]}, headers=headers).status_code == 422
         assert client.post("/nlp/parse", json={"query": "x" * 5000}, headers=headers).status_code == 422
@@ -206,7 +206,7 @@ class TestInputValidation:
 class TestModelEndpoints:
     def test_nlp_parse_persian(self, env):
         client, secrets, _ = env
-        body = client.post("/nlp/parse", json={"query": "نانوحامل لیپیدی برای تومور، اندازه بین ۸۰ تا ۱۲۰ نانومتر"},
+        body = client.post("/nlp/parse", json={"query": "A lipid nanocarrier for tumor, size between 80 to 120 nm"},
                            headers=_login(client, secrets, "res1")).json()
         assert body["scaffold_type"] == "lipid" and body["target_tissue"] == "tumor"
         assert body["size_range_nm"] == [80.0, 120.0] and body["complete"] is True
@@ -225,7 +225,7 @@ class TestModelEndpoints:
         from ipind2.featurization import is_valid_smiles
 
         client, secrets, _ = env
-        body = client.post("/generate", json={"query": "نانوحامل لیپیدی", "n": 20}, headers=_login(client, secrets, "res1")).json()
+        body = client.post("/generate", json={"query": "A lipid nanocarrier", "n": 20}, headers=_login(client, secrets, "res1")).json()
         assert body["structures"] and all(is_valid_smiles(s["smiles"]) for s in body["structures"])
         assert body["stats"]["validity_rate"] == 1.0
 
@@ -244,7 +244,7 @@ class TestModelEndpoints:
 
 class TestDesignJob:
     def _run(self, client, headers, **overrides):
-        body = {"query": "نانوحامل لیپیدی برای تومور، اندازه بین ۸۰ تا ۱۲۰ نانومتر", "n_generate": 100, "n_pareto": 6,
+        body = {"query": "A lipid nanocarrier for tumor, size between 80 to 120 nm", "n_generate": 100, "n_pareto": 6,
                 "n_final": 2, "optimize_iterations": 10, "run_md": False, "explain": False}
         body.update(overrides)
         submitted = client.post("/design", json=body, headers=headers)
@@ -269,7 +269,7 @@ class TestDesignJob:
         graph = json.loads(client.get(f"/export/{job_id}?fmt=jsonld", headers=headers).content)["@graph"]
         assert len(graph) == len(result["final_candidates"])
         provenance = {o["prov:wasGeneratedBy"]["ipind:provenance"] for node in graph for o in node["ipind:material"]}
-        assert provenance == {"predicted"}, "مقادیر پیش‌بینی هرگز نباید measured برچسب بخورند"
+        assert provenance == {"predicted"}, "Predicted values must never be labeled measured"
         csv_text = client.get(f"/export/{job_id}?fmt=csv", headers=headers).text
         assert csv_text.startswith("identifier,category,field")
 
@@ -285,7 +285,7 @@ class TestDesignJob:
     def test_report_escapes_malicious_query(self, env):
         client, secrets, _ = env
         headers = _login(client, secrets, "res1")
-        payload = "نانوحامل لیپیدی <script>alert(1)</script>"
+        payload = "A lipid nanocarrier <script>alert(1)</script>"
         job_id = self._run(client, headers, query=payload)
         _wait_for_job(client, headers, job_id)
         html = client.get(f"/reports/{job_id}", headers=headers).text
@@ -322,14 +322,14 @@ class TestLabFeedbackLoop:
         client.post("/lab/results", json={"rows": self.ROWS}, headers=headers)
 
         waiting = client.post("/active-learning/retrain", json={"force": False}, headers=headers).json()
-        assert waiting["retrained"] is False, "کمتر از ۱۰ نتیجه ⇒ بدون به‌روزرسانی (SRS §4.6)"
+        assert waiting["retrained"] is False, "Fewer than 10 results ⇒ no update (SRS §4.6)"
 
         done = client.post("/active-learning/retrain", json={"force": True}, headers=headers).json()
         assert done["retrained"] is True and done["version"] == before + "+al1"
         assert client.get("/health").json()["model_version"] == done["version"]
 
         again = client.post("/active-learning/retrain", json={"force": True}, headers=headers).json()
-        assert again["retrained"] is False, "نتایج مصرف‌شده نباید دوباره استفاده شوند"
+        assert again["retrained"] is False, "Consumed results must not be used again"
 
     def test_propose_returns_valid_unique_subset(self, env, small_dataset):
         client, secrets, _ = env

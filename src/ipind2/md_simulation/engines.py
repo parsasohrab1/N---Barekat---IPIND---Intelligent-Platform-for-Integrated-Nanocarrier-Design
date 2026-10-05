@@ -1,15 +1,15 @@
 """
-موتورهای شبیه‌سازی (FR-05): GROMACS، OpenMM و مجموعه کانفورمر RDKit.
+Simulation engines (FR-05): GROMACS, OpenMM and the RDKit conformer set.
 
-هر موتور یک ``Trajectory`` برمی‌گرداند که فیلد ``fidelity`` صادقانه سطح واقعی شبیه‌سازی را
-نشان می‌دهد:
+Each engine returns a ``Trajectory`` whose ``fidelity`` field honestly shows the real simulation
+level:
 
-* ``"md"`` — شبیه‌سازی دینامیک مولکولی واقعی (GROMACS / OpenMM)؛
-* ``"conformer_ensemble"`` — نمونه‌برداری کانفورمری RDKit (ETKDG + MMFF)، **MD نیست**؛
-  برای غربالگری سریع و تست خط لوله در محیط‌هایی که موتور MD نصب نیست.
+* ``"md"`` — real molecular dynamics simulation (GROMACS / OpenMM);
+* ``"conformer_ensemble"`` — RDKit conformer sampling (ETKDG + MMFF), **not MD**;
+  for fast screening and testing the pipeline in environments where no MD engine is installed.
 
-موتورهای MD در صورت نبودِ نرم‌افزار ``MDEngineUnavailable`` می‌اندازند و هرگز بی‌صدا به
-حالت کم‌دقت‌تر برنمی‌گردند — انتخاب جایگزین کار فراخوان است (نگاه کنید به
+MD engines raise ``MDEngineUnavailable`` if the software is missing and never silently fall back to a
+lower-fidelity mode — choosing an alternative is the caller's job (see
 ``validation.validate_candidates``).
 """
 
@@ -23,16 +23,16 @@ import numpy as np
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem
 
-RDLogger.DisableLog("rdApp.*")  # UFFTYPER برای فلزات هر بار هشدار می‌دهد؛ نبود پارامتر را خودمان گزارش می‌کنیم
+RDLogger.DisableLog("rdApp.*")  # UFFTYPER warns every time for metals; we report the missing parameters ourselves
 
 
 class MDEngineUnavailable(RuntimeError):
-    """موتور درخواستی (یا وابستگی‌های آن) روی این ماشین نصب نیست."""
+    """The requested engine (or its dependencies) is not installed on this machine."""
 
 
 @dataclass
 class Trajectory:
-    """مسیر شبیه‌سازی: مختصات (T, N, 3) بر حسب Å، عناصر و فراداده."""
+    """Simulation trajectory: coordinates (T, N, 3) in Å, elements and metadata."""
 
     coords: np.ndarray
     elements: List[str]
@@ -40,7 +40,7 @@ class Trajectory:
     engine: str
     smiles: str = ""
     energies_kcal: Optional[np.ndarray] = None
-    bonds: List[tuple] = field(default_factory=list)  # (i, j) اندیس اتم‌ها
+    bonds: List[tuple] = field(default_factory=list)  # (i, j) atom indices
     simulated_ns: float = 0.0
     metadata: Dict = field(default_factory=dict)
 
@@ -57,10 +57,10 @@ class MDEngine(Protocol):
 
 class ConformerEnsembleEngine:
     """
-    نمونه‌برداری کانفورمری سریع (ETKDG + بهینه‌سازی MMFF/UFF). **MD نیست.**
+    Fast conformer sampling (ETKDG + MMFF/UFF optimization). **Not MD.**
 
-    ``duration_ns`` نادیده گرفته می‌شود (و ``simulated_ns=0`` گزارش می‌شود)؛ تعداد فریم‌ها با
-    ``n_conformers`` تعیین می‌شود.
+    ``duration_ns`` is ignored (and ``simulated_ns=0`` is reported); the number of frames is set by
+    ``n_conformers``.
     """
 
     name = "rdkit-conformer-ensemble"
@@ -73,22 +73,22 @@ class ConformerEnsembleEngine:
     def simulate(self, smiles: str, duration_ns: float = 0.0, **kwargs) -> Trajectory:
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
-            raise ValueError(f"SMILES نامعتبر: {smiles!r}")
+            raise ValueError(f"Invalid SMILES: {smiles!r}")
         mol = Chem.AddHs(mol)
 
         params = AllChem.ETKDGv3()
         params.randomSeed = self.seed
-        params.useRandomCoords = True  # برای زنجیره‌های بلند/آبگریز پایدارتر است
+        params.useRandomCoords = True  # more stable for long/hydrophobic chains
         params.maxIterations = 200
-        params.numThreads = self.n_threads  # ۰ = همه هسته‌ها
+        params.numThreads = self.n_threads  # 0 = all cores
         conformer_ids = list(AllChem.EmbedMultipleConfs(mol, self.n_conformers, params))
         if not conformer_ids:
-            raise RuntimeError(f"تولید کانفورمر برای {smiles!r} ممکن نشد")
+            raise RuntimeError(f"Conformer generation failed for {smiles!r}")
 
         energies: List[float] = [float("nan")] * len(conformer_ids)
         method = "none (no force-field parameters)"
-        # فقط وقتی همه اتم‌ها پارامتر دارند انرژی گزارش می‌شود؛ وگرنه عدد بی‌معنی
-        # (مثلاً Au در UFF) به‌جای NaN وارد خروجی می‌شد.
+        # Energy is reported only when all atoms have parameters; otherwise a meaningless number
+        # (e.g., Au in UFF) would enter the output instead of NaN.
         try:
             if AllChem.MMFFHasAllMoleculeParams(mol):
                 results = AllChem.MMFFOptimizeMoleculeConfs(mol, maxIters=500, numThreads=self.n_threads)
@@ -98,7 +98,7 @@ class ConformerEnsembleEngine:
                 results = AllChem.UFFOptimizeMoleculeConfs(mol, maxIters=500, numThreads=self.n_threads)
                 method = "UFF"
                 energies = [float(e) for _, e in results]
-        except Exception:  # pragma: no cover - خطای غیرمنتظره بهینه‌ساز
+        except Exception:  # pragma: no cover - unexpected optimizer error
             energies = [float("nan")] * len(conformer_ids)
 
         coords = np.stack([mol.GetConformer(cid).GetPositions() for cid in conformer_ids])
@@ -119,19 +119,19 @@ class ConformerEnsembleEngine:
 
 class GromacsEngine:
     """
-    آداپتور GROMACS. ورودی‌های سیستم (ساختار .gro و توپولوژی .top با میدان نیروی
-    CHARMM36/OPLS-AA) باید از قبل ساخته شده باشند — مولکول‌های نانوحامل به پارامترسازی
-    اختصاصی (CGenFF/LigParGen) نیاز دارند که خارج از دامنه این آداپتور است.
+    GROMACS adapter. The system inputs (.gro structure and .top topology with a CHARMM36/OPLS-AA
+    force field) must already be built — nanocarrier molecules need dedicated
+    parameterization (CGenFF/LigParGen) which is outside the scope of this adapter.
 
-    ``prepare`` فایل‌های ``.mdp`` را می‌نویسد (بدون نیاز به GROMACS)؛ ``simulate`` به
-    ``gmx`` روی PATH نیاز دارد.
+    ``prepare`` writes the ``.mdp`` files (no GROMACS needed); ``simulate`` requires
+    ``gmx`` on PATH.
     """
 
     name = "gromacs"
 
     def __init__(self, work_dir: str, forcefield: str = "charmm36", gmx_executable: str = "gmx"):
         if forcefield not in ("charmm36", "oplsaa"):
-            raise ValueError("forcefield باید charmm36 یا oplsaa باشد")
+            raise ValueError("forcefield must be charmm36 or oplsaa")
         self.work_dir = Path(work_dir)
         self.forcefield = forcefield
         self.gmx = gmx_executable
@@ -140,7 +140,7 @@ class GromacsEngine:
         n_steps = int(round(duration_ns * 1000.0 / dt_ps))
         return "\n".join(
             [
-                "; تولیدشده توسط ipind2.md_simulation.GromacsEngine",
+                "; generated by ipind2.md_simulation.GromacsEngine",
                 "integrator = md",
                 f"dt = {dt_ps}",
                 f"nsteps = {n_steps}",
@@ -166,7 +166,7 @@ class GromacsEngine:
         )
 
     def prepare(self, duration_ns: float = 100.0, temperature_k: float = 310.0) -> Path:
-        """نوشتن ``production.mdp``؛ مسیر فایل را برمی‌گرداند."""
+        """Write ``production.mdp``; returns the file path."""
         self.work_dir.mkdir(parents=True, exist_ok=True)
         mdp = self.work_dir / "production.mdp"
         mdp.write_text(self.mdp_text(duration_ns, temperature_k), encoding="utf-8")
@@ -178,21 +178,21 @@ class GromacsEngine:
     def simulate(self, smiles: str, duration_ns: float = 100.0, **kwargs) -> Trajectory:
         if not self.available():
             raise MDEngineUnavailable(
-                f"اجرایی «{self.gmx}» روی PATH یافت نشد؛ GROMACS را نصب کنید یا "
-                "از OpenMMEngine/ConformerEnsembleEngine استفاده کنید."
+                f"Executable '{self.gmx}' not found on PATH; install GROMACS or "
+                "use OpenMMEngine/ConformerEnsembleEngine."
             )
         system = self.work_dir / "system.gro"
         topology = self.work_dir / "topol.top"
         if not system.exists() or not topology.exists():
             raise MDEngineUnavailable(
-                f"فایل‌های سیستم آماده نیست ({system.name}, {topology.name}) — پارامترسازی میدان "
-                "نیرو برای این ساختار باید پیش از اجرا انجام شود."
+                f"System files are not ready ({system.name}, {topology.name}) — force-field parameterization "
+                "for this structure must be done before running."
             )
         try:
             import MDAnalysis as mda
-        except ImportError as exc:  # پیش از اجرای گران بررسی می‌کنیم، نه بعد از آن
+        except ImportError as exc:  # we check before the expensive run, not after it
             raise MDEngineUnavailable(
-                "MDAnalysis برای خواندن مسیر xtc لازم است (pip install MDAnalysis)"
+                "MDAnalysis is required to read the xtc trajectory (pip install MDAnalysis)"
             ) from exc
 
         mdp = self.prepare(duration_ns, kwargs.get("temperature_k", 310.0))
@@ -222,10 +222,10 @@ class GromacsEngine:
 
 class OpenMMEngine:
     """
-    آداپتور OpenMM (حلال ضمنی GBn2، Langevin، ۳۱۰ K).
+    OpenMM adapter (GBn2 implicit solvent, Langevin, 310 K).
 
-    ⚠️ در CI این مخزن اجرا نمی‌شود (OpenMM/openmmforcefields نصب نیست)؛ مسیر کد فقط با
-    import واقعی روی ماشین دارای OpenMM فعال می‌شود.
+    ⚠️ Not run in this repo's CI (OpenMM/openmmforcefields are not installed); the code path is
+    only activated by a real import on a machine that has OpenMM.
     """
 
     name = "openmm"
@@ -242,7 +242,7 @@ class OpenMMEngine:
             from openff.toolkit.topology import Molecule
         except ImportError as exc:
             raise MDEngineUnavailable(
-                "OpenMM/openmmforcefields/openff-toolkit نصب نیست "
+                "OpenMM/openmmforcefields/openff-toolkit are not installed "
                 "(pip install openmm openmmforcefields openff-toolkit)"
             ) from exc
 
@@ -291,7 +291,7 @@ class OpenMMEngine:
 
 
 def available_engines(work_dir: str = ".") -> Sequence[str]:
-    """نام موتورهای قابل‌استفاده روی این ماشین (مجموعه کانفورمر همیشه هست)."""
+    """Names of engines usable on this machine (the conformer set is always available)."""
     names = [ConformerEnsembleEngine.name]
     if GromacsEngine(work_dir).available():
         names.append(GromacsEngine.name)

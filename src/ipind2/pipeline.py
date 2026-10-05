@@ -1,13 +1,13 @@
 """
-خط لوله انتها‌به‌انتهای طراحی (جریان داده SRS §3.2).
+End-to-end design pipeline (SRS §3.2 data flow).
 
-۱. ورودی: پرس‌وجوی زبان طبیعی یا پارامترهای ساختاریافته  → ``TargetParameters``
-۲. تولید: مولد شرطی CVAE+CGAN چندین ساختار معتبر می‌سازد
-۳. پیش‌بینی: GNN فیزیکوشیمیایی + Transformer زیستی (با عدم‌قطعیت ensemble)
-۴. بهینه‌سازی: Pareto-Guided RL + جبهه پارتوی ساختارهای تولیدشده
-۵. اعتبارسنجی: شبیه‌سازی برای کاندیداهای برتر (سطح واقعی در خروجی ثبت می‌شود)
-۶. خروجی: ۳–۵ کاندیدای نهایی با پیش‌بینی، نمره اطمینان و تفسیر
-(۷. بازخورد آزمایشگاهی در ``active_learning`` پس از ثبت نتایج انجام می‌شود.)
+1. Input: natural-language query or structured parameters  → ``TargetParameters``
+2. Generation: the conditional CVAE+CGAN generator builds several valid structures
+3. Prediction: physicochemical GNN + biological Transformer (with ensemble uncertainty)
+4. Optimization: Pareto-Guided RL + Pareto front of generated structures
+5. Validation: simulation for the top candidates (the real level is recorded in the output)
+6. Output: 3–5 final candidates with prediction, confidence score and interpretation
+(7. Lab feedback is done in ``active_learning`` after results are recorded.)
 """
 
 import time
@@ -44,7 +44,7 @@ EXPLAIN_TARGETS = (
 
 @dataclass
 class DesignResult:
-    """خروجی کامل یک اجرای طراحی."""
+    """Complete output of one design run."""
 
     query: Optional[str]
     parameters: TargetParameters
@@ -68,7 +68,7 @@ class DesignResult:
 
 
 def _predict_frame(bundle: ModelBundle, smiles: Sequence[str]):
-    """پیش‌بینی هر دو مدل، هم‌ترتیب با ورودی (ردیف نامعتبر = NaN) + انحراف‌معیار ensemble."""
+    """Prediction of both models, in the same order as the input (invalid row = NaN) + ensemble standard deviation."""
     smiles = list(smiles)
     index = range(len(smiles))
     pm, ps, _ = bundle.physico.predict_with_uncertainty(smiles)
@@ -79,7 +79,7 @@ def _predict_frame(bundle: ModelBundle, smiles: Sequence[str]):
 
 
 class DesignPipeline:
-    """هماهنگ‌کننده واحدهای ۱ تا ۸ روی یک ``ModelBundle`` آموزش‌دیده."""
+    """Coordinator of Units 1 to 8 on a trained ``ModelBundle``."""
 
     def __init__(self, bundle: ModelBundle, md_engine: Optional[MDEngine] = None, seed: int = 0):
         self.bundle = bundle
@@ -101,7 +101,7 @@ class DesignPipeline:
         uncertainty_penalty: float = 0.0,
     ) -> DesignResult:
         if not 1 <= n_final <= n_pareto:
-            raise ValueError("باید 1 ≤ n_final ≤ n_pareto باشد")
+            raise ValueError("Must have 1 ≤ n_final ≤ n_pareto")
         timings: Dict[str, float] = {}
         warnings: List[str] = []
         clock = time.perf_counter()
@@ -112,31 +112,31 @@ class DesignPipeline:
             timings[name] = round(now - clock, 3)
             clock = now
 
-        # ۱) ورودی
+        # 1) Input
         query = request if isinstance(request, str) else None
         params = parse_query(request) if isinstance(request, str) else request
         if params.unresolved_terms:
-            warnings.append(f"پارامترهای نامشخص (با پیش‌فرض جایگزین شد): {', '.join(params.unresolved_terms)}")
+            warnings.append(f"Unspecified parameters (replaced with defaults): {', '.join(params.unresolved_terms)}")
         if params.target_tissue not in (None, "tumor"):
             warnings.append(
-                f"بافت هدف «{params.target_tissue}» ثبت شد اما در توابع هدف فعلی اثری ندارد "
-                "(اهداف بر پایه TBR/نفوذ سلولی عمومی‌اند)."
+                f"Target tissue '{params.target_tissue}' was recorded but has no effect in the current objective functions "
+                "(objectives are based on generic TBR/cellular uptake)."
             )
         condition = GenerationCondition.from_target_parameters(params)
         size_range = params.size_range_nm or DEFAULT_SIZE_RANGE_NM
         lap("parse")
 
-        # ۲) تولید
+        # 2) Generation
         generated, gen_stats = self.bundle.generator.generate(n_generate, condition, seed=self.seed)
         generated_smiles = [s.smiles for s in generated]
         if len(generated) < 0.5 * n_generate:
             warnings.append(
-                f"مولد فقط {len(generated)} از {n_generate} ساختار یکتا برای این شرط تحویل داد "
-                "(شرط بسیار باریک یا استخر کوچک)."
+                f"The generator delivered only {len(generated)} of {n_generate} unique structures for this condition "
+                "(very narrow condition or small pool)."
             )
         lap("generate")
 
-        # ۳+۴) بهینه‌سازی روی ساختارهای تولیدشده + PG-RL در کل فضای قالب‌ها
+        # 3+4) Optimization on generated structures + PG-RL over the whole template space
         objective = PredictorObjective(self.bundle.physico, self.bundle.bio, uncertainty_penalty)
         constraints = Constraints.from_target_parameters(params)
         optimizer = ParetoGuidedRL(
@@ -159,7 +159,7 @@ class DesignPipeline:
         pool = pd.concat([pool[columns], rl_front[columns]], ignore_index=True).drop_duplicates("smiles")
         pool = pool[constraints.feasible(pool)] if len(pool) else pool
         if pool.empty:
-            warnings.append("هیچ کاندیدایی قیود را برآورده نکرد؛ قیود را آسان‌تر کنید.")
+            warnings.append("No candidate satisfied the constraints; relax the constraints.")
             return DesignResult(query, params, condition, [], pool, None, self._stats(gen_stats, rl, timings), warnings)
 
         values = objective_matrix({n: pool[c].to_numpy() for n, c in OBJECTIVE_COLUMNS.items()}, size_range)
@@ -172,7 +172,7 @@ class DesignPipeline:
         pareto_values = front_values[order]
         lap("pareto_select")
 
-        # ۵) شبیه‌سازی
+        # 5) Simulation
         report: Optional[ValidationReport] = None
         stable: Dict[str, bool] = {}
         if run_md:
@@ -182,12 +182,12 @@ class DesignPipeline:
             stable = {r.smiles: r.stable for r in report.results}
             if not report.md_complete:
                 warnings.append(
-                    "اعتبارسنجی شبیه‌سازی با MD واقعی ≥۱۰۰ ns انجام نشد؛ نتیجه فقط غربالگری کانفورمری است "
-                    "(نگاه کنید به fidelity در ValidationReport)."
+                    "Simulation validation with real MD ≥100 ns was not performed; the result is only conformer screening "
+                    "(see fidelity in ValidationReport)."
                 )
         lap("validate")
 
-        # ۶) رتبه‌بندی نهایی: ترکیب هدف‌های نرمال‌شده + پایداری شبیه‌سازی
+        # 6) Final ranking: combination of normalized objectives + simulation stability
         span = np.maximum(pareto_values.max(axis=0) - pareto_values.min(axis=0), 1e-9)
         composite = ((pareto_values - pareto_values.min(axis=0)) / span).mean(axis=1)
         pareto["composite_score"] = composite
@@ -195,17 +195,17 @@ class DesignPipeline:
         ranked = pareto.assign(_rank_key=composite + np.where(pareto["md_stable"] == True, 0.5, 0.0))  # noqa: E712
         finalists = ranked.sort_values("_rank_key", ascending=False).head(n_final)
 
-        # ۶ب) پیش‌بینی کامل + اطمینان + تفسیر
+        # 6b) Full prediction + confidence + interpretation
         mean, std = _predict_frame(self.bundle, finalists["smiles"].tolist())
         explainer = None
         if explain:
-            # نمونه‌ی جانشین: ساختارهای تولیدشده + همه ساختارهایی که PG-RL ارزیابی کرد
+            # Surrogate sample: generated structures + all structures evaluated by PG-RL
             sample = list(dict.fromkeys(generated_smiles + optimizer.evaluated_smiles()))[:400]
             if len(sample) >= 30:
                 explainer = SurrogateExplainer(self.bundle.physico, sample, targets=[t for t in EXPLAIN_TARGETS if t.startswith("phys_")])
                 bio_explainer = SurrogateExplainer(self.bundle.bio, sample, targets=[t for t in EXPLAIN_TARGETS if t.startswith("bio_")])
             else:
-                warnings.append("نمونه برای ساخت مدل جانشین تفسیر کافی نبود؛ تفسیر حذف شد.")
+                warnings.append("Not enough samples to build the interpretation surrogate model; interpretation omitted.")
 
         final: List[Dict[str, Any]] = []
         for position, (_, row) in enumerate(finalists.iterrows()):

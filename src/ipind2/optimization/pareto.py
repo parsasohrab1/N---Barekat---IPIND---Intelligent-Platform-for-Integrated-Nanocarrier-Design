@@ -1,8 +1,8 @@
 """
-ابزارهای پارتو: غلبه (dominance)، مرتب‌سازی نامغلوب، فاصله ازدحام و هایپرحجم.
+Pareto tools: dominance, non-dominated sorting, crowding distance and hypervolume.
 
-همه اهداف به‌صورت **حداکثرسازی** در نظر گرفته می‌شوند؛ اهداف حداقل‌سازی (سمیت، اندازه
-نامطلوب) پیش از ورود به این توابع باید نفی/تبدیل شوند (نگاه کنید به
+All objectives are treated as **maximization**; minimization objectives (toxicity, undesirable
+size) must be negated/transformed before entering these functions (see
 ``objectives.py``).
 
 See docs/SRS.md §4.4 (FR-04).
@@ -14,23 +14,23 @@ import numpy as np
 
 
 def dominates(a: np.ndarray, b: np.ndarray) -> bool:
-    """آیا ``a`` بر ``b`` غلبه دارد (در همه اهداف ≥ و حداقل در یکی >)."""
+    """Whether ``a`` dominates ``b`` (≥ in all objectives and > in at least one)."""
     return bool(np.all(a >= b) and np.any(a > b))
 
 
 def non_dominated_sort(objectives: np.ndarray) -> List[np.ndarray]:
     """
-    مرتب‌سازی نامغلوب سریع (NSGA-II). ``objectives`` به شکل (n, m)؛ همه حداکثرسازی.
+    Fast non-dominated sorting (NSGA-II). ``objectives`` has shape (n, m); all maximization.
 
     Returns:
-        فهرست جبهه‌ها؛ جبهه ۰ همان جبهه پارتوی بهینه است.
+        List of fronts; front 0 is the optimal Pareto front.
     """
     objectives = np.asarray(objectives, dtype=float)
     n = objectives.shape[0]
     if n == 0:
         return []
 
-    # ماتریس غلبه با broadcasting: dominated_by[i, j] = i بر j غلبه دارد
+    # Dominance matrix with broadcasting: dominated_by[i, j] = i dominates j
     ge = np.all(objectives[:, None, :] >= objectives[None, :, :], axis=2)
     gt = np.any(objectives[:, None, :] > objectives[None, :, :], axis=2)
     dominated_by = ge & gt
@@ -41,7 +41,7 @@ def non_dominated_sort(objectives: np.ndarray) -> List[np.ndarray]:
     counts = domination_count.copy()
     while remaining.any():
         current = np.where(remaining & (counts == 0))[0]
-        if current.size == 0:  # محافظ (نباید رخ دهد)
+        if current.size == 0:  # guard (should not happen)
             current = np.where(remaining)[0]
         fronts.append(current)
         remaining[current] = False
@@ -50,7 +50,7 @@ def non_dominated_sort(objectives: np.ndarray) -> List[np.ndarray]:
 
 
 def pareto_ranks(objectives: np.ndarray) -> np.ndarray:
-    """رتبه پارتو هر نمونه (۱ = جبهه اول)."""
+    """Pareto rank of each sample (1 = first front)."""
     objectives = np.asarray(objectives, dtype=float)
     ranks = np.zeros(objectives.shape[0], dtype=int)
     for rank, front in enumerate(non_dominated_sort(objectives), start=1):
@@ -59,12 +59,12 @@ def pareto_ranks(objectives: np.ndarray) -> np.ndarray:
 
 
 def pareto_front_mask(objectives: np.ndarray) -> np.ndarray:
-    """ماسک بولی اعضای جبهه اول."""
+    """Boolean mask of first-front members."""
     return pareto_ranks(objectives) == 1
 
 
 def crowding_distance(objectives: np.ndarray) -> np.ndarray:
-    """فاصله ازدحام (برای انتخاب کاندیداهای متنوع روی جبهه)."""
+    """Crowding distance (for selecting diverse candidates on the front)."""
     objectives = np.asarray(objectives, dtype=float)
     n, m = objectives.shape
     distance = np.zeros(n)
@@ -84,10 +84,10 @@ def crowding_distance(objectives: np.ndarray) -> np.ndarray:
 
 def hypervolume(front: np.ndarray, reference: np.ndarray, n_samples: int = 20000, seed: int = 0) -> float:
     """
-    تخمین هایپرحجم جبهه نسبت به نقطه مرجع (Monte-Carlo؛ همه اهداف حداکثرسازی).
+    Hypervolume estimate of the front relative to a reference point (Monte-Carlo; all objectives maximization).
 
-    برای معیار همگرایی FR-04 («تغییر < ۱٪ در ۱۰۰ تکرار») کافی است؛ دقت دقیق لازم
-    نیست چون فقط *تغییر نسبی* بین تکرارها مقایسه می‌شود (با بذر ثابت، نویز حذف می‌شود).
+    Sufficient for the FR-04 convergence criterion ("change < 1% over 100 iterations"); exact accuracy is not
+    needed because only the *relative change* between iterations is compared (with a fixed seed, noise is eliminated).
     """
     front = np.asarray(front, dtype=float)
     reference = np.asarray(reference, dtype=float)

@@ -1,4 +1,4 @@
-"""ساخت، اعتبارسنجی، خروجی و ورودی رکوردهای FAIR/MIRIBEL (FR-13)."""
+"""Building, validating, exporting and importing FAIR/MIRIBEL records (FR-13)."""
 
 import csv
 import json
@@ -17,14 +17,14 @@ from .schema import (
 
 CONTEXT = {
     "@vocab": "https://schema.org/",
-    "ipind": "https://ipind2.example.org/ns#",  # جای‌نگهدار: قبل از انتشار به دامنه واقعی تغییر دهید
+    "ipind": "https://ipind2.example.org/ns#",  # placeholder: change to the real domain before release
     "qudt": "http://qudt.org/schema/qudt/",
     "prov": "http://www.w3.org/ns/prov#",
     "unit": {"@id": "qudt:unit", "@type": "@id"},
     "value": "qudt:value",
 }
 
-# نگاشت نام فیلد پیش‌بین → (دسته، فیلد MIRIBEL)
+# Mapping of predictor field name → (category, MIRIBEL field)
 PREDICTION_FIELD_MAP = {
     "phys_size_nm": ("material", "hydrodynamic_size_nm"),
     "phys_zeta_potential_mV": ("material", "zeta_potential_mV"),
@@ -51,7 +51,7 @@ def record_from_candidate(
     scaffold_type: Optional[str] = None,
     license: str = "CC-BY-4.0",
 ) -> NanoparticleRecord:
-    """رکورد از یک کاندیدای ``DesignResult.final_candidates`` (همه مقادیر predicted)."""
+    """Record from a candidate of ``DesignResult.final_candidates`` (all values predicted)."""
     record = NanoparticleRecord(
         identifier=new_identifier(),
         license=license,
@@ -83,10 +83,10 @@ def attach_measurements(
     experiment: Mapping[str, Any],
     method: str = "DLS",
 ) -> NanoparticleRecord:
-    """افزودن نتایج آزمایشگاهی (ستون‌های ``experimental_results``) به رکورد."""
+    """Add lab results (``experimental_results`` columns) to the record."""
     for column, (category, name) in EXPERIMENT_FIELD_MAP.items():
         value = experiment.get(column)
-        if value is not None and value == value:  # حذف NaN
+        if value is not None and value == value:  # drop NaN
             getattr(record, category)[name] = Observation(float(value), "measured", method=method)
     if experiment.get("lab_technician"):
         record.protocol["operator"] = Observation(experiment["lab_technician"], "measured")
@@ -97,9 +97,9 @@ def attach_measurements(
 
 @dataclass
 class CompletenessReport:
-    score: float  # ۰..۱: سهم فیلدهای MIRIBEL پر
+    score: float  # 0..1: share of filled MIRIBEL fields
     missing: Dict[str, List[str]]
-    predicted_only: List[str]  # فیلدهایی که فقط پیش‌بینی دارند (بدون اندازه‌گیری)
+    predicted_only: List[str]  # fields that only have a prediction (no measurement)
 
     @property
     def complete(self) -> bool:
@@ -107,7 +107,7 @@ class CompletenessReport:
 
 
 def validate_record(record: NanoparticleRecord) -> CompletenessReport:
-    """بررسی کامل‌بودن رکورد نسبت به فیلدهای سه دسته MIRIBEL."""
+    """Check record completeness against the fields of the three MIRIBEL categories."""
     missing: Dict[str, List[str]] = {}
     filled = total = 0
     predicted_only: List[str] = []
@@ -137,7 +137,7 @@ def _observation_to_jsonld(name: str, obs: Observation) -> Dict[str, Any]:
 
 
 def to_jsonld(record: NanoparticleRecord) -> Dict[str, Any]:
-    """رکورد JSON-LD (Interoperable: واژگان schema.org/QUDT/PROV)."""
+    """JSON-LD record (Interoperable: schema.org/QUDT/PROV vocabularies)."""
     report = validate_record(record)
     return {
         "@context": CONTEXT,
@@ -155,7 +155,7 @@ def to_jsonld(record: NanoparticleRecord) -> Dict[str, Any]:
 
 
 def export_records(records: Sequence[NanoparticleRecord], path: str, fmt: str = "jsonld") -> Path:
-    """نوشتن رکوردها: ``jsonld`` (یک آرایه ``@graph``) یا ``csv`` (تخت، با ستون provenance)."""
+    """Write records: ``jsonld`` (a ``@graph`` array) or ``csv`` (flat, with a provenance column)."""
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     if fmt == "jsonld":
@@ -193,12 +193,12 @@ def export_records(records: Sequence[NanoparticleRecord], path: str, fmt: str = 
             writer.writeheader()
             writer.writerows(rows)
     else:
-        raise ValueError("fmt باید jsonld یا csv باشد")
+        raise ValueError("fmt must be jsonld or csv")
     return out
 
 
 def load_jsonld(path: str) -> List[NanoparticleRecord]:
-    """بازخوانی خروجی ``export_records(..., 'jsonld')`` (تعامل‌پذیری رفت‌وبرگشتی)."""
+    """Read back the output of ``export_records(..., 'jsonld')`` (round-trip interoperability)."""
     document = json.loads(Path(path).read_text(encoding="utf-8"))
     records: List[NanoparticleRecord] = []
     for node in document.get("@graph", []):

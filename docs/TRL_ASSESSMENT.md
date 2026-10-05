@@ -1,46 +1,46 @@
-# ارزیابی TRL (شواهدمحور)
+# TRL Assessment (Evidence-Based)
 
-> **نتیجه صادقانه: TRL 4 اثبات‌شده؛ TRL 5 هنوز برقرار نیست.**
-> کد و آزمون‌ها آمادگی مهندسی TRL 5 را فراهم کرده‌اند، اما TRL 5 یعنی اعتبارسنجی در **محیط مرتبط** (داده/آزمایش واقعی، MD واقعی، استقرار staging)، و این‌ها با نوشتن کد حاصل نمی‌شوند. بخش «گام‌های باقی‌مانده» دقیقاً می‌گوید چه چیزی لازم است.
+> **Honest result: TRL 4 proven; TRL 5 not yet achieved.**
+> The code and tests provide the engineering readiness for TRL 5, but TRL 5 means validation in a **relevant environment** (real data/experiments, real MD, staging deployment), and these are not achieved by writing code. The "Remaining steps" section states exactly what is needed.
 
-خروجی زیر را `python -m ipind2.trl --tests-passed yes` از روی `docs/validation_report.json` و `benchmarks/history.json` محاسبه کرده است (معیارها در [`src/ipind2/trl.py`](../src/ipind2/trl.py)، با تست که ثابت می‌کند داده سنتتیک یا ادعا نمی‌تواند به TRL 5 برسد).
+The output below was computed by `python -m ipind2.trl --tests-passed yes` from `docs/validation_report.json` and `benchmarks/history.json` (criteria in [`src/ipind2/trl.py`](../src/ipind2/trl.py), with a test proving that synthetic data or a claim cannot reach TRL 5).
 
-## TRL محاسبه‌شده از شواهد: **4**
+## TRL computed from evidence: **4**
 
-| سطح | معیار | وضعیت | شاهد |
+| Level | Criterion | Status | Evidence |
 |---|---|---|---|
-| 4 | T1: مجموعه تست خودکار گذراست | ✅ | pytest PASS |
-| 4 | T2: دقت مدل روی holdout سنتتیک: NFR-01/02/03 و FR-03 | ✅ | از validation_report.accuracy_holdout |
-| 4 | T3: NFR عملکردی (۰۴، ۰۵، ۰۶، ۰۸) اندازه‌گیری و برقرار | ✅ | NFR-04=✓, NFR-05=✓, NFR-06=✓, NFR-08=✓ |
-| 5 | R1: دروازه بنچمارک مرجع منجمد PASS (بدون افت و NFR برقرار) | ✅ | benchmark_gate.passed |
-| 5 | R2: روی دیتاست عمومی واقعی، R² پلتفرم ≥ خط پایه ساده (RandomForest+Morgan) | ❌ | lantern-hela: R² پلتفرم 0.304 در برابر خط پایه RandomForest+Morgan 0.482 |
-| 5 | R3: اعتبارسنجی MD واقعی (≥۱۰۰ ns، موتور MD) برای کاندیداها | ❌ | فقط نمونه‌برداری کانفورمری؛ موتور MD اجرا نشده |
-| 5 | R4: حلقه آزمایشگاهی: ≥10 نتیجه واقعی و بهبود روی holdout واقعی | ❌ | 0 نتیجه واقعی؛ بهبود holdout=خیر/سنجیده نشده |
-| 5 | R5: استقرار در محیط مرتبط (staging: PostgreSQL+TLS1.3+Redis) با تأیید امضاشده | ❌ | تأیید دستی موجود نیست |
-| 5 | R6: بازبینی امنیتی مستقل (SEC-01..06) با تأیید امضاشده | ❌ | تأیید دستی موجود نیست |
+| 4 | T1: Automated test suite passes | ✅ | pytest PASS |
+| 4 | T2: Model accuracy on synthetic holdout: NFR-01/02/03 and FR-03 | ✅ | From validation_report.accuracy_holdout |
+| 4 | T3: Performance NFRs (04, 05, 06, 08) measured and satisfied | ✅ | NFR-04=✓, NFR-05=✓, NFR-06=✓, NFR-08=✓ |
+| 5 | R1: Frozen reference benchmark gate PASS (no degradation and NFRs hold) | ✅ | benchmark_gate.passed |
+| 5 | R2: On a real public dataset, platform R² ≥ simple baseline (RandomForest+Morgan) | ❌ | lantern-hela: platform R² 0.304 vs. RandomForest+Morgan baseline 0.482 |
+| 5 | R3: Real MD validation (≥100 ns, MD engine) for candidates | ❌ | Only conformer sampling; MD engine not run |
+| 5 | R4: Lab loop: ≥10 real results and improvement on a real holdout | ❌ | 0 real results; holdout improvement=no/not measured |
+| 5 | R5: Deployment in a relevant environment (staging: PostgreSQL+TLS1.3+Redis) with signed attestation | ❌ | No manual attestation available |
+| 5 | R6: Independent security review (SEC-01..06) with signed attestation | ❌ | No manual attestation available |
 
-- برای TRL ۵ معیارهای برآورده‌نشده: R2, R3, R4, R5, R6
-- بدون MD واقعی، FR-05 (≥۱۰۰ ns) تأیید نشده؛ نمونه‌برداری کانفورمری جایگزین آن نیست.
+- Unmet criteria for TRL 5: R2, R3, R4, R5, R6
+- Without real MD, FR-05 (≥100 ns) is not confirmed; conformer sampling is not a substitute for it.
 
-## گام‌های باقی‌مانده برای TRL 5 (به ترتیب اولویت)
+## Remaining steps for TRL 5 (in priority order)
 
-| معیار | کار لازم | چه کسی/چه چیزی |
+| Criterion | Work needed | Who/what |
 |---|---|---|
-| R2 | **اجرا شد و شکست خورد:** روی LANTERN/AGILE واقعی، GNN پلتفرم R²=۰٫۳۰ و خط پایه RandomForest+Morgan ۰٫۴۸ است. باید معماری/ویژگی‌ها بهبود یابد (مثلاً افزودن اثرانگشت Morgan به ویژگی‌های global) و بنچمارک دوباره اجرا شود. LNP-622 فایل مستقیم ندارد و LANCE فقط به درخواست از نویسندگان در دسترس است | کار پژوهشی/مهندسی؛ برای ویژگی‌های خود پلتفرم (اندازه، زتا، ...) هنوز داده واقعی لازم است |
-| R3 | GROMACS یا OpenMM (+ GPU) نصب، پارامترسازی میدان نیرو (CGenFF/GAFF) برای کاندیداها، اجرای ≥ ۱۰۰ ns | زیرساخت محاسباتی؛ آداپتورها آماده‌اند اما با MD واقعی اجرا نشده‌اند (مسیر OpenMM حتی اجرا هم نشده) |
-| R4 | ثبت ≥ ۱۰ نتیجه آزمایشگاهی **واقعی** با `POST /lab/results`، اجرای `retrain` و نشان‌دادن بهبود روی holdout واقعی | آزمایشگاه شریک؛ replay را از داده آموزش واقعی بدهید |
-| R5 | استقرار `docker compose` در staging (PostgreSQL + TLS 1.3 + Redis) و تأیید امضاشده در `docs/trl_attestations.json` | تیم زیرساخت |
-| R6 | بازبینی امنیتی مستقل (SEC-01..06) و تأیید امضاشده | بازبین مستقل |
+| R2 | **Ran and failed:** on real LANTERN/AGILE, the platform GNN has R²=0.30 and the RandomForest+Morgan baseline 0.48. The architecture/features must be improved (e.g., adding Morgan fingerprints to the global features) and the benchmark rerun. LNP-622 has no direct file and LANCE is available only on request from the authors | Research/engineering work; real data is still needed for the platform's own properties (size, zeta, ...) |
+| R3 | Install GROMACS or OpenMM (+ GPU), parameterize the force field (CGenFF/GAFF) for the candidates, run ≥ 100 ns | Compute infrastructure; adapters are ready but have not been run with real MD (the OpenMM path has not even been executed) |
+| R4 | Record ≥ 10 **real** lab results with `POST /lab/results`, run `retrain` and show improvement on a real holdout | Partner lab; supply replay from real training data |
+| R5 | Deploy `docker compose` in staging (PostgreSQL + TLS 1.3 + Redis) and a signed attestation in `docs/trl_attestations.json` | Infrastructure team |
+| R6 | Independent security review (SEC-01..06) and signed attestation | Independent reviewer |
 
-قالب تأیید دستی:
+Manual attestation template:
 
 ```json
-{"staging_deployment": {"signed_by": "نام", "date": "YYYY-MM-DD", "evidence": "لینک/شناسه گزارش"},
- "security_review":    {"signed_by": "نام", "date": "YYYY-MM-DD", "evidence": "لینک/شناسه گزارش"}}
+{"staging_deployment": {"signed_by": "Name", "date": "YYYY-MM-DD", "evidence": "link/report ID"},
+ "security_review":    {"signed_by": "Name", "date": "YYYY-MM-DD", "evidence": "link/report ID"}}
 ```
 
-## چه چیزی واقعاً اثبات شده است
+## What is actually proven
 
-- ۳۲۷ تست خودکار گذراست؛ آزمون‌های امنیت و بازگشت‌پذیری باگ‌ها با **mutation check** تأیید شده‌اند (نگاه کنید به [`MODEL_VALIDATION.md`](MODEL_VALIDATION.md)).
-- NFR-01/02/03 و FR-03 روی داده **سنتتیک** نگه‌داشته‌شده؛ NFR-04/05/06/08 با اندازه‌گیری واقعی؛ NFR-10 از نظر اندازه (نه مبدأ عمومی).
-- این اعداد «دقت روی داده تجربی» نیستند.
+- 327 automated tests pass; the security tests and bug regressions were confirmed with a **mutation check** (see [`MODEL_VALIDATION.md`](MODEL_VALIDATION.md)).
+- NFR-01/02/03 and FR-03 on held-out **synthetic** data; NFR-04/05/06/08 with real measurement; NFR-10 in terms of size (not public origin).
+- These numbers are not "accuracy on experimental data".

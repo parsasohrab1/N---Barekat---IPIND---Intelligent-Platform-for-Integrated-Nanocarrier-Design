@@ -1,4 +1,4 @@
-"""بسته مدل (ModelBundle): پیش‌بین‌های واحد ۲/۳ + مولد واحد ۱ با مانیفست نسخه‌دار."""
+"""Model bundle (ModelBundle): Unit 2/3 predictors + Unit 1 generator with a versioned manifest."""
 
 import json
 from dataclasses import dataclass, field

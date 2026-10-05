@@ -1,4 +1,4 @@
-"""ارزیاب TRL نباید با داده سنتتیک یا ادعا به سطح ۵ برسد."""
+"""The TRL assessor must not reach level 5 with synthetic data or a claim."""
 
 import json
 
@@ -54,7 +54,7 @@ def _bench(tmp_path, gnn, forest):
 
 
 def test_weak_real_data_performance_does_not_satisfy_r2(tmp_path):
-    """GNN پلتفرم روی داده واقعی از خط پایه ساده ضعیف‌تر است ⇒ R2 برقرار نیست."""
+    """The platform GNN on real data is weaker than the simple baseline ⇒ R2 is not satisfied."""
     result = assess(_write(tmp_path, "r.json", GOOD_REPORT), None, public_benchmark_path=_bench(tmp_path, 0.30, 0.48), test_suite_passed=True)
     r2 = next(c for c in result.criteria if c.id == "R2")
     assert not r2.met and "0.300" in r2.evidence and "0.480" in r2.evidence

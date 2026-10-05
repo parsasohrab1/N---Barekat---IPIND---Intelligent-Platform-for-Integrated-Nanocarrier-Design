@@ -1,11 +1,11 @@
 """
-اعتبارسنجی انتشار: اندازه‌گیری واقعی NFRهای عملکردی و دروازه بنچمارک.
+Release validation: real measurement of performance NFRs and the benchmark gate.
 
     python -m ipind2.training.validate --model-dir models/v1 --out docs/validation_report.json
 
-هر عدد در گزارش از یک اجرای واقعی روی همین ماشین می‌آید (با مشخصات سخت‌افزار ثبت‌شده)؛
-هیچ مقداری دستی وارد نمی‌شود. اندازه کتابخانه seed (NFR-10) فقط با ``--seed-library`` ساخته
-می‌شود چون چند دقیقه طول می‌کشد.
+Every number in the report comes from a real run on this machine (with hardware specs recorded);
+no value is entered manually. The seed library size (NFR-10) is built only with ``--seed-library``
+because it takes several minutes.
 """
 
 import argparse
@@ -38,7 +38,7 @@ def hardware() -> Dict[str, Any]:
 def measure(bundle: ModelBundle, n_library: int = 100_000, build_seed_library: bool = False) -> Dict[str, Any]:
     report: Dict[str, Any] = {"hardware": hardware(), "model_version": bundle.version}
 
-    # NFR-04: زمان تولید ۱۰۰k ساختار (<۱۰ دقیقه)
+    # NFR-04: time to generate 100k structures (<10 minutes)
     started = time.perf_counter()
     structures, stats = generate_library(n_library, seed=1)
     elapsed = time.perf_counter() - started
@@ -47,19 +47,19 @@ def measure(bundle: ModelBundle, n_library: int = 100_000, build_seed_library: b
         "validity_rate": stats.validity_rate, "passed": bool(elapsed < 600 and len(structures) >= n_library),
     }
 
-    # NFR-05: زمان پیش‌بینی هر ساختار (<۱۰۰ ms)، هر دو مدل، ensemble کامل
+    # NFR-05: prediction time per structure (<100 ms), both models, full ensemble
     sample = [s.smiles for s in structures[:256]]
-    bundle.physico.predict(sample[:8]); bundle.bio.predict(sample[:8])  # گرم‌کردن
+    bundle.physico.predict(sample[:8]); bundle.bio.predict(sample[:8])  # warm-up
     started = time.perf_counter()
     bundle.physico.predict(sample); bundle.bio.predict(sample)
     per_structure_ms = 1000 * (time.perf_counter() - started) / len(sample)
     report["NFR-05"] = {"ms_per_structure": round(per_structure_ms, 2), "limit_ms": 100, "ensemble_size": bundle.physico.n_ensemble,
                         "passed": bool(per_structure_ms < 100)}
 
-    # NFR-06: بهینه‌سازی ۱۰۰۰ کاندیدا (<۱ ساعت)
+    # NFR-06: optimization of 1000 candidates (<1 hour)
     pipeline = DesignPipeline(bundle, seed=0)
     started = time.perf_counter()
-    result = pipeline.design("نانوحامل لیپیدی برای تومور، اندازه بین ۸۰ تا ۱۲۰ نانومتر", n_generate=1000, n_pareto=15, n_final=5,
+    result = pipeline.design("A lipid nanocarrier for tumor, size between 80 to 120 nm", n_generate=1000, n_pareto=15, n_final=5,
                              optimize_iterations=40, optimize_batch=25, run_md=False, explain=True)
     elapsed = time.perf_counter() - started
     report["NFR-06"] = {
@@ -68,7 +68,7 @@ def measure(bundle: ModelBundle, n_library: int = 100_000, build_seed_library: b
         "stage_seconds": result.stats["timings_seconds"], "final_candidates": len(result.final_candidates),
     }
 
-    # NFR-08: مقیاس‌پذیری فضای ساختاری و NFR-10
+    # NFR-08: scalability of the structural space and NFR-10
     report["NFR-08"] = {"theoretical_space": theoretical_library_size(), "required": 1_000_000,
                         "passed": bool(theoretical_library_size() >= 1_000_000)}
     if build_seed_library:
@@ -80,7 +80,7 @@ def measure(bundle: ModelBundle, n_library: int = 100_000, build_seed_library: b
             "n_total": seed.n_total, "n_combinatorial": seed.n_combinatorial, "n_public": seed.n_public,
             "seconds": round(seed.elapsed_seconds, 1), "meets_size": seed.meets_size_requirement,
             "meets_public_source": seed.meets_public_source_requirement,
-            "note": "مبدأ ساختارها ترکیبیاتی است؛ شرط «پایگاه عمومی» فقط با فایل‌های PubChem/ZINC برآورده می‌شود.",
+            "note": "The origin of the structures is combinatorial; the 'public database' condition is satisfied only with PubChem/ZINC files.",
         }
     return report
 

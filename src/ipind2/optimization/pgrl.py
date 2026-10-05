@@ -1,17 +1,17 @@
 """
-بهینه‌سازی چندهدفه با یادگیری تقویتی هدایت‌شده با پارتو (Pareto-Guided RL) — FR-04.
+Multi-objective optimization with Pareto-Guided Reinforcement Learning — FR-04.
 
-سیاست (policy): توزیع categorical روی «قالب ساختاری» و سپس روی بلوک هر جایگاه آن قالب
-(فضای عمل = فضای ساختاری ``generation.building_blocks``). در هر تکرار یک دسته ساختار از
-سیاست نمونه‌برداری، با تابع هدف ارزیابی و با REINFORCE سیاست به‌روز می‌شود.
+Policy: a categorical distribution over the "structural template" and then over the block of each slot of that template
+(action space = the structural space ``generation.building_blocks``). In each iteration a batch of structures is sampled from the
+policy, evaluated with the objective function, and the policy is updated with REINFORCE.
 
-پاداش «هدایت‌شده با پارتو» ترکیب دو جزء است:
-1. پاداش رتبه: ``1/رتبه پارتو`` در میان دسته + آرشیو (ساختارهای روی جبهه بیشترین پاداش را
-   می‌گیرند)؛
-2. اسکالرسازی Chebyshev با وزن‌های تصادفی Dirichlet در هر تکرار، تا سیاست به یک نقطه جبهه
-   همگرا نشود و کل جبهه پوشش داده شود.
+The "Pareto-guided" reward is a combination of two components:
+1. Rank reward: ``1/Pareto rank`` among the batch + archive (structures on the front get the highest reward);
+   ).
+2. Chebyshev scalarization with random Dirichlet weights in each iteration, so the policy does not converge to a single front
+   point and the whole front is covered.
 
-معیار همگرایی طبق SRS §4.4: تغییر هایپرحجم آرشیو < ۱٪ در ۱۰۰ تکرار.
+Convergence criterion per SRS §4.4: change in archive hypervolume < 1% over 100 iterations.
 
 See docs/SRS.md §4.4 (FR-04), NFR-06.
 """
@@ -28,13 +28,13 @@ from ..featurization import canonical_smiles, is_valid_smiles
 from .objectives import OBJECTIVE_COLUMNS, OBJECTIVE_NAMES, objective_matrix, size_fit_score
 from .pareto import crowding_distance, hypervolume, pareto_ranks
 
-# تابع هدف: فهرست SMILES -> دیتافریم با ستون‌های OBJECTIVE_COLUMNS (به‌ترتیب ورودی)
+# Objective function: list of SMILES -> dataframe with OBJECTIVE_COLUMNS (in input order)
 ObjectiveFn = Callable[[Sequence[str]], pd.DataFrame]
 
 
 @dataclass
 class Constraints:
-    """قیود سخت طراحی؛ ساختار ناقض قید از آرشیو جبهه کنار گذاشته می‌شود."""
+    """Hard design constraints; a structure violating a constraint is excluded from the front archive."""
 
     size_range_nm: Optional[Tuple[float, float]] = None
     min_loading_efficiency: Optional[float] = None
@@ -42,7 +42,7 @@ class Constraints:
 
     @classmethod
     def from_target_parameters(cls, params) -> "Constraints":
-        """ساخت قیود از خروجی رابط زبان طبیعی (``nlp_interface.TargetParameters``)."""
+        """Build constraints from the natural-language interface output (``nlp_interface.TargetParameters``)."""
         return cls(
             size_range_nm=params.size_range_nm,
             min_loading_efficiency=params.min_loading_efficiency,
@@ -65,9 +65,9 @@ class Constraints:
 
 @dataclass
 class OptimizationResult:
-    """نتیجه یک اجرای بهینه‌سازی."""
+    """Result of one optimization run."""
 
-    candidates: pd.DataFrame  # جبهه پارتو (smiles + ستون‌های هدف + ...)
+    candidates: pd.DataFrame  # Pareto front (smiles + objective columns + ...)
     archive_size: int
     iterations: int
     converged: bool
@@ -80,7 +80,7 @@ class OptimizationResult:
 
 
 class _FactorizedPolicy:
-    """سیاست categorical: لایه اول قالب، لایه دوم بلوک هر جایگاه؛ با REINFORCE به‌روز می‌شود."""
+    """Categorical policy: first layer template, second layer the block of each slot; updated with REINFORCE."""
 
     def __init__(self, templates: Sequence[StructureTemplate]):
         self.templates = list(templates)
@@ -88,7 +88,7 @@ class _FactorizedPolicy:
         self.slot_logits: List[Dict[str, np.ndarray]] = [
             {slot: np.zeros(len(options)) for slot, options in t.slots} for t in self.templates
         ]
-        # حالت Adam برای به‌روزرسانی پایدار
+        # Adam state for stable updates
         self._m: Dict[Tuple, np.ndarray] = {}
         self._v: Dict[Tuple, np.ndarray] = {}
         self._t = 0
@@ -134,7 +134,7 @@ class _FactorizedPolicy:
         lr: float,
         entropy_bonus: float,
     ) -> None:
-        """گام گرادیان REINFORCE (بالا رفتن log-prob عمل‌های با مزیت مثبت)."""
+        """REINFORCE gradient step (raising the log-prob of actions with positive advantage)."""
         self._t += 1
         batch = max(len(actions), 1)
 
@@ -169,13 +169,13 @@ class _FactorizedPolicy:
 
 class ParetoGuidedRL:
     """
-    بهینه‌ساز چندهدفه PG-RL.
+    PG-RL multi-objective optimizer.
 
     Args:
-        objective_fn: ارزیاب ساختارها (پیش‌بین‌های واحد ۲/۳ یا oracle).
-        scaffold_type: محدودکردن قالب‌ها به یک کلاس اسکلت (یا ``None`` برای همه).
-        constraints: قیود سخت (اندازه، حداقل بارگذاری، حداقل IC50).
-        size_range: بازه مطلوب اندازه برای هدف ``size_fit``.
+        objective_fn: structure evaluator (Unit 2/3 predictors or the oracle).
+        scaffold_type: restrict templates to one scaffold class (or ``None`` for all).
+        constraints: hard constraints (size, minimum loading, minimum IC50).
+        size_range: desired size range for the ``size_fit`` objective.
     """
 
     def __init__(
@@ -201,11 +201,11 @@ class ParetoGuidedRL:
         self.policy = _FactorizedPolicy(templates_for(scaffold_type))
         self._cache: Dict[str, np.ndarray] = {}
         self._frames: Dict[str, Dict[str, float]] = {}
-        self._archive: Dict[str, np.ndarray] = {}  # smiles -> بردار هدف (فقط شدنی‌ها)
+        self._archive: Dict[str, np.ndarray] = {}  # smiles -> objective vector (feasible only)
 
     # ------------------------------------------------------------------
     def _evaluate(self, smiles_list: Sequence[str]) -> np.ndarray:
-        """ماتریس اهداف (n, 5) با کش؛ SMILES نامعتبر امتیاز بسیار بد می‌گیرد."""
+        """Objective matrix (n, 5) with cache; invalid SMILES get a very bad score."""
         new = [s for s in dict.fromkeys(smiles_list) if s not in self._cache and is_valid_smiles(s)]
         if new:
             frame = self.objective_fn(new)
@@ -222,7 +222,7 @@ class ParetoGuidedRL:
         return np.stack([self._cache.get(s, worst) for s in smiles_list])
 
     def evaluated_smiles(self) -> List[str]:
-        """همه ساختارهای ارزیابی‌شده تا اینجا (برای ساخت مدل‌های جانشین تفسیر و تحلیل)."""
+        """All structures evaluated so far (for building surrogate interpretation models and analysis)."""
         return list(self._cache)
 
     def _front(self) -> Tuple[List[str], np.ndarray]:
@@ -234,7 +234,7 @@ class ParetoGuidedRL:
         return [s for s, m in zip(smiles, mask) if m], values[mask]
 
     def _reward_scale(self, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """نرمال‌سازی هر هدف با بازه مشاهده‌شده در cache (برای Chebyshev)."""
+        """Normalize each objective with the range observed in the cache (for Chebyshev)."""
         pool = np.stack(list(self._cache.values())) if self._cache else values
         return pool.min(axis=0), np.maximum(pool.max(axis=0) - pool.min(axis=0), 1e-9)
 
@@ -248,10 +248,10 @@ class ParetoGuidedRL:
         verbose: bool = False,
     ) -> OptimizationResult:
         """
-        اجرای بهینه‌سازی.
+        Run the optimization.
 
-        توقف: وقتی تغییر نسبی هایپرحجم آرشیو در ``patience_window`` تکرار اخیر
-        کمتر از ``tolerance`` باشد (SRS: ۱٪ در ۱۰۰ تکرار) یا ``iterations`` تمام شود.
+        Stopping: when the relative change in archive hypervolume over the last ``patience_window`` iterations is
+        less than ``tolerance`` (SRS: 1% over 100 iterations) or ``iterations`` is exhausted.
         """
         started = time.perf_counter()
         history: List[float] = []
@@ -308,8 +308,8 @@ class ParetoGuidedRL:
     def _front_frame(self, max_rows: int = 200) -> pd.DataFrame:
         smiles, values = self._front()
         if not smiles:
-            # ستون‌ها باید با حالت غیرخالی یکی باشند تا فراخوان (pipeline) بتواند بدون خطا
-            # concat/فیلتر کند و قیودِ ناممکن به‌صورت هشدار گزارش شود نه KeyError.
+            # The columns must match the non-empty case so the caller (pipeline) can
+            # concat/filter without errors and impossible constraints are reported as a warning, not a KeyError.
             return pd.DataFrame(
                 columns=[
                     "smiles", "canonical", *OBJECTIVE_COLUMNS.values(),
@@ -328,7 +328,7 @@ class ParetoGuidedRL:
         return pd.DataFrame(rows)
 
     def select_diverse(self, n: int = 15) -> pd.DataFrame:
-        """۱۰–۲۰ کاندیدای متنوع روی جبهه (بیشترین فاصله ازدحام) — خروجی FR-04."""
+        """10–20 diverse candidates on the front (largest crowding distance) — the FR-04 output."""
         return self._front_frame(max_rows=n)
 
 
@@ -339,7 +339,7 @@ def random_search_front(
     size_range: Tuple[float, float] = (80.0, 120.0),
     seed: int = 0,
 ) -> np.ndarray:
-    """خط پایه: جبهه پارتوی جست‌وجوی تصادفی با همان بودجه ارزیابی (برای مقایسه با PG-RL)."""
+    """Baseline: Pareto front of random search with the same evaluation budget (for comparison with PG-RL)."""
     from ..generation.library import CombinatorialLibrary
 
     library = CombinatorialLibrary(scaffold_type=scaffold_type, seed=seed)

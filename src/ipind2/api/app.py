@@ -1,13 +1,13 @@
 """
-لایه API/رابط کاربری (FR-07، FR-10، FR-11، SEC-01..SEC-05).
+API/user interface layer (FR-07, FR-10, FR-11, SEC-01..SEC-05).
 
-* احراز هویت: ورود با رمز + TOTP → JWT کوتاه‌عمر؛ هر endpoint یک «مجوز» نام‌دار می‌خواهد
-  (RBAC با deny-by-default) و هر دسترسی/رد دسترسی در ``audit_log`` ثبت می‌شود.
-* ورودی‌ها با Pydantic محدود می‌شوند (طول رشته، تعداد ردیف، بازه اعداد) و بدنه بیش از ۲ MB رد می‌شود.
-* هدرهای امنیتی و CSP با nonce برای داشبورد؛ پاسخ‌های API ذخیره (cache) نمی‌شوند.
-* کارهای سنگین (طراحی کامل) ناهمگام روی thread-pool اجرا و در جدول ``jobs`` ثبت می‌شوند.
+* Authentication: login with password + TOTP → short-lived JWT; every endpoint requires a named "permission"
+  (RBAC with deny-by-default) and every access/denial is recorded in ``audit_log``.
+* Inputs are bounded with Pydantic (string length, row count, numeric ranges) and bodies over 2 MB are rejected.
+* Security headers and CSP with nonce for the dashboard; API responses are not cached.
+* Heavy jobs (full design) run asynchronously on a thread pool and are recorded in the ``jobs`` table.
 
-TLS 1.3 در لایه استقرار اعمال می‌شود (``security.tls.ssl_context`` / ``deploy/nginx.conf``).
+TLS 1.3 is enforced at the deployment layer (``security.tls.ssl_context`` / ``deploy/nginx.conf``).
 """
 
 import json
@@ -54,7 +54,7 @@ MAX_BODY_BYTES = 2 * 1024 * 1024
 
 
 # ----------------------------------------------------------------------
-# مدل‌های درخواست
+# Request models
 # ----------------------------------------------------------------------
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=64)
@@ -88,7 +88,7 @@ class ParametersModel(BaseModel):
     def to_target_parameters(self) -> TargetParameters:
         size = tuple(self.size_range_nm) if self.size_range_nm else None
         if size and not (0 <= size[0] < size[1] <= 1000):
-            raise ValueError("size_range_nm باید 0 ≤ حداقل < حداکثر ≤ 1000 باشد")
+            raise ValueError("size_range_nm must satisfy 0 ≤ min < max ≤ 1000")
         return TargetParameters(
             scaffold_type=self.scaffold_type,
             target_tissue=self.target_tissue,
@@ -110,9 +110,9 @@ class DesignRequest(BaseModel):
 
     @model_validator(mode="after")
     def _need_input(self):
-        # field_validator برای مقدار پیش‌فرض None اجرا نمی‌شود؛ بررسی باید سطح مدل باشد
+        # field_validator does not run for the default value None; the check must be at the model level
         if self.parameters is None and not self.query:
-            raise ValueError("یکی از query یا parameters لازم است")
+            raise ValueError("One of query or parameters is required")
         return self
 
 
@@ -127,7 +127,7 @@ class SmilesRequest(BaseModel):
     @classmethod
     def _bounded(cls, values):
         if any(len(s) > 2048 for s in values):
-            raise ValueError("طول هر SMILES حداکثر ۲۰۴۸ نویسه است")
+            raise ValueError("Each SMILES may be at most 2048 characters long")
         return values
 
 
@@ -171,7 +171,7 @@ def _json_safe(frame: pd.DataFrame) -> List[Dict[str, Any]]:
 
 
 def _jsonable(value: Any) -> Any:
-    """تبدیل مقادیر numpy/tuple به انواع JSON-پذیر (ستون JSON پایگاه داده json.dumps خالص است)."""
+    """Convert numpy/tuple values to JSON-serializable types (the database JSON column uses plain json.dumps)."""
     import numpy as np
 
     def default(obj):
@@ -207,13 +207,13 @@ def create_app(
     app.state.metrics = {"requests_total": 0, "jobs_total": 0, "denied_total": 0}
     app.state.pipelines: Dict[int, DesignPipeline] = {}
 
-    # --- میان‌افزارها --------------------------------------------------
+    # --- Middleware --------------------------------------------------
     @app.middleware("http")
     async def secure(request: Request, call_next):
         app.state.metrics["requests_total"] += 1
         length = request.headers.get("content-length")
         if length and length.isdigit() and int(length) > MAX_BODY_BYTES:
-            return JSONResponse({"detail": "بدنه درخواست بیش از حد بزرگ است"}, status_code=413)
+            return JSONResponse({"detail": "Request body is too large"}, status_code=413)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -223,7 +223,7 @@ def create_app(
             response.headers["Cache-Control"] = "no-store"
         return response
 
-    # --- کمکی‌ها -----------------------------------------------------------
+    # --- Helpers -----------------------------------------------------------
     def get_bundle() -> ModelBundle:
         if app.state.bundle is None:
             if settings.model_dir and Path(settings.model_dir, "manifest.json").exists():
@@ -231,7 +231,7 @@ def create_app(
                     if app.state.bundle is None:
                         app.state.bundle = ModelBundle.load(settings.model_dir)
             else:
-                raise HTTPException(503, "مدل بارگذاری نشده است (IPIND_MODEL_DIR را تنظیم یا مدل را آموزش دهید)")
+                raise HTTPException(503, "Model is not loaded (set IPIND_MODEL_DIR or train a model)")
         return app.state.bundle
 
     def pipeline() -> DesignPipeline:
@@ -252,36 +252,36 @@ def create_app(
             )
 
     def require(permission: str) -> Callable:
-        """وابستگی FastAPI: توکن را می‌خواند، مجوز را می‌سنجد و دسترسی را ثبت می‌کند."""
+        """FastAPI dependency: reads the token, checks the permission and records the access."""
 
         def dependency(request: Request) -> Principal:
             header = request.headers.get("authorization", "")
             if not header.lower().startswith("bearer "):
-                raise HTTPException(401, "توکن ارائه نشده است")
+                raise HTTPException(401, "No token provided")
             try:
                 claims = decode_token(header[7:])
             except AuthError:
-                raise HTTPException(401, "توکن نامعتبر یا منقضی است")
+                raise HTTPException(401, "Token is invalid or expired")
             principal = Principal(claims["sub"], claims["role"])
-            # کاربر پس از صدور توکن ممکن است غیرفعال شده باشد
+            # The user may have been deactivated after the token was issued
             with session_scope(session_factory) as s:
                 user = s.query(User).filter(User.username == principal.username).one_or_none()
                 if user is None or not user.is_active:
-                    raise HTTPException(401, "حساب کاربری فعال نیست")
-                principal.role = user.role  # نقش را از منبع حقیقت (DB) می‌خوانیم، نه از توکن
+                    raise HTTPException(401, "User account is not active")
+                principal.role = user.role  # we read the role from the source of truth (DB), not from the token
             try:
                 authorize(principal.role, permission)
             except PermissionDenied:
                 app.state.metrics["denied_total"] += 1
                 audit(principal, f"{request.method} {request.url.path}", status="denied",
                       detail={"permission": permission}, request=request)
-                raise HTTPException(403, "مجوز کافی ندارید")
+                raise HTTPException(403, "Insufficient permission")
             audit(principal, f"{request.method} {request.url.path}", detail={"permission": permission}, request=request)
             return principal
 
         return dependency
 
-    # --- عمومی -----------------------------------------------------------
+    # --- Public -----------------------------------------------------------
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def dashboard() -> HTMLResponse:
         nonce = secrets.token_urlsafe(16)
@@ -305,7 +305,7 @@ def create_app(
     def metrics(principal: Principal = Depends(require("audit_read"))) -> str:
         return "".join(f"ipind2_{k} {v}\n" for k, v in app.state.metrics.items())
 
-    # --- احراز هویت ---------------------------------------------------------
+    # --- Authentication ---------------------------------------------------------
     @app.post("/auth/login")
     def login(body: LoginRequest, request: Request) -> Dict[str, Any]:
         error: Optional[AuthError] = None
@@ -316,7 +316,7 @@ def create_app(
                     body.username, body.password, body.totp_code,
                     ip_address=request.client.host if request.client else None,
                 )
-            except AuthError as exc:  # داخل scope می‌گیریم تا شمارنده تلاش و لاگ commit شوند
+            except AuthError as exc:  # we catch inside the scope so the attempt counter and log are committed
                 error = exc
         if error is not None:
             raise HTTPException(401, str(error))
@@ -341,7 +341,7 @@ def create_app(
             if user is not None and verify_password(body.password, user.password_hash):
                 ok = AuthService(s, app.state.encryption_key).confirm_totp(body.username, body.code)
         if not ok:
-            raise HTTPException(401, "نام کاربری، رمز یا کد نادرست است")
+            raise HTTPException(401, "Username, password or code is incorrect")
         return {"enrolled": True}
 
     @app.get("/audit")
@@ -354,7 +354,7 @@ def create_app(
                 for r in rows
             ]
 
-    # --- زبان طبیعی / تولید / پیش‌بینی -------------------------------------
+    # --- Natural language / generation / prediction -------------------------------------
     @app.post("/nlp/parse")
     def nlp_parse(body: QueryRequest, principal: Principal = Depends(require("read"))) -> Dict[str, Any]:
         params = parse_query(body.query)
@@ -391,14 +391,14 @@ def create_app(
     @app.post("/validate")
     def validate(body: SmilesRequest, principal: Principal = Depends(require("validate"))) -> Dict[str, Any]:
         if len(body.smiles) > 10:
-            raise HTTPException(422, "حداکثر ۱۰ کاندیدا در هر درخواست")
+            raise HTTPException(422, "At most 10 candidates per request")
         bad = [s for s in body.smiles if not is_valid_smiles(s)]
         if bad:
-            raise HTTPException(422, f"SMILES نامعتبر: {bad[:3]}")
+            raise HTTPException(422, f"Invalid SMILES: {bad[:3]}")
         report = validate_candidates(body.smiles, fallback_to_conformers=True)
         return {"md_complete": report.md_complete, "results": [r.to_dict() for r in report.results]}
 
-    # --- طراحی (ناهمگام) ------------------------------------------------
+    # --- Design (asynchronous) ------------------------------------------------
     def run_design_job(job_id: str, body: DesignRequest) -> None:
         try:
             request_value = (
@@ -418,7 +418,7 @@ def create_app(
             payload["model_version"] = get_bundle().version
             payload = _jsonable(payload)
             outcome: Dict[str, Any] = {"status": "done", "result": payload, "error": None}
-        except Exception as exc:  # خطای کار نباید thread را بکشد؛ در جدول jobs ثبت می‌شود
+        except Exception as exc:  # a job error must not kill the thread; it is recorded in the jobs table
             outcome = {"status": "failed", "result": None, "error": f"{type(exc).__name__}: {exc}"}
         with session_scope(session_factory) as s:
             job = JobRepository(s).get(job_id)
@@ -427,7 +427,7 @@ def create_app(
 
     @app.post("/design", status_code=202)
     def design(body: DesignRequest, principal: Principal = Depends(require("optimize"))) -> Dict[str, Any]:
-        get_bundle()  # ۵۰۳ سریع اگر مدل نیست
+        get_bundle()  # fast 503 if there is no model
         if body.parameters is not None:
             try:
                 body.parameters.to_target_parameters()
@@ -444,7 +444,7 @@ def create_app(
         with session_scope(session_factory) as s:
             job = JobRepository(s).get(job_id)
             if job is None or (job.owner != principal.username and principal.role != "admin"):
-                raise HTTPException(404, "کار یافت نشد")  # وجود/عدم وجود کار دیگران را فاش نمی‌کنیم
+                raise HTTPException(404, "Job not found")  # we do not reveal the existence/non-existence of other users' jobs
             s.expunge(job)
             return job
 
@@ -457,7 +457,7 @@ def create_app(
     def report(job_id: str, principal: Principal = Depends(require("read"))) -> HTMLResponse:
         job = load_job(job_id, principal)
         if job.status != "done" or not job.result:
-            raise HTTPException(409, "کار هنوز تمام نشده است")
+            raise HTTPException(409, "Job is not finished yet")
         return HTMLResponse(render_report(job.result), headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
 
     @app.get("/export/{job_id}")
@@ -467,7 +467,7 @@ def create_app(
 
         job = load_job(job_id, principal)
         if job.status != "done" or not job.result:
-            raise HTTPException(409, "کار هنوز تمام نشده است")
+            raise HTTPException(409, "Job is not finished yet")
         version = job.result.get("model_version", "unknown")
         scaffold = (job.result.get("parameters") or {}).get("scaffold_type")
         records = [record_from_candidate(c, version, scaffold) for c in job.result["final_candidates"]]
@@ -477,7 +477,7 @@ def create_app(
         media = "application/ld+json" if fmt == "jsonld" else "text/csv"
         return Response(content, media_type=media)
 
-    # --- آزمایشگاه + یادگیری فعال ------------------------------------------
+    # --- Lab + active learning ------------------------------------------
     @app.post("/lab/results")
     def lab_results(body: LabRowsRequest, principal: Principal = Depends(require("lab_ingest"))) -> Dict[str, Any]:
         from ..lab_automation.schema import ExperimentalResult
@@ -493,11 +493,11 @@ def create_app(
                     if smiles:
                         molecule = repo.add_molecule(str(smiles)[:2048])
                         if molecule is None:
-                            raise ValueError("SMILES نامعتبر")
+                            raise ValueError("Invalid SMILES")
                         data["molecule_id"] = molecule.id
                     rows.append(ExperimentalResult.from_dict(data).to_dict())
                 except (ValueError, TypeError) as exc:
-                    rejected.append(f"ردیف {position + 1}: {exc}")
+                    rejected.append(f"Row {position + 1}: {exc}")
             accepted = repo.add_experimental_results(pd.DataFrame(rows)) if rows else 0
             pending = len(repo.unconsumed_results())
         return {"accepted": accepted, "rejected": rejected, "pending": pending}
@@ -507,7 +507,7 @@ def create_app(
         bundle_ = get_bundle()
         valid = [s for s in body.pool_smiles if is_valid_smiles(s)]
         if len(valid) < body.n:
-            raise HTTPException(422, "تعداد SMILES معتبر از تعداد درخواستی کمتر است")
+            raise HTTPException(422, "The number of valid SMILES is less than the number requested")
         indices = select_samples(valid, [bundle_.physico, bundle_.bio], body.n, body.strategy)
         return {"strategy": body.strategy, "selected": [valid[i] for i in indices]}
 
@@ -521,7 +521,7 @@ def create_app(
             pending = repo.unconsumed_results()
             lookup = repo.smiles_by_id()
         if pending.empty:
-            return {"retrained": False, "message": "نتیجه آزمایشگاهی جدیدی وجود ندارد"}
+            return {"retrained": False, "message": "There are no new lab results"}
 
         replay = SyntheticDataGenerator(0).generate_dataset(300, include_pareto_labels=False)
         loop = ActiveLearningLoop(
@@ -533,7 +533,7 @@ def create_app(
         if report_ is None:
             return {
                 "retrained": False,
-                "message": f"{loop.pending} نتیجه در انتظار؛ حداقل {loop.min_batch} لازم است (یا force=true)",
+                "message": f"{loop.pending} results pending; at least {loop.min_batch} required (or force=true)",
             }
         with session_scope(session_factory) as s:
             MoleculeRepository(s).mark_consumed([int(i) for i in pending["_row_id"]])
@@ -541,7 +541,7 @@ def create_app(
             s.add(ModelVersion(name="bundle", version=bundle_.version, metrics={"n_new": report_.n_new}, trained_on="active-learning"))
         return {
             "retrained": True,
-            "message": f"مدل با {report_.n_new} نتیجه جدید به‌روز شد (replay: {report_.n_replay} نمونه سنتتیک)",
+            "message": f"Model updated with {report_.n_new} new results (replay: {report_.n_replay} synthetic samples)",
             "version": bundle_.version,
         }
 

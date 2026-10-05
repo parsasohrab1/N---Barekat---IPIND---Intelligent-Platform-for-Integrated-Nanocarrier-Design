@@ -1,15 +1,15 @@
 """
 Synthetic Data Generator for IPIND² Platform
-پلتفرم یکپارچه طراحی هوشمند نانوحامل‌های دارویی
+Integrated Platform for Intelligent Design of Drug Nanocarriers
 
-داده‌های سنتتیک آموزش مدل‌های واحد ۱ تا ۴ را تولید می‌کند. ساختارها از کتابخانه ترکیبیاتی
-``ipind2.generation`` می‌آیند (SMILES واقعی و یکتا، اعتبارسنجی‌شده با RDKit) و ویژگی‌ها
-از قوانین ساختار→خاصیت ``properties.py`` به‌همراه نویز محاسبه می‌شوند.
+Generates the synthetic training data for the models of Units 1 to 4. Structures come from the combinatorial library
+``ipind2.generation`` (real, unique SMILES, validated with RDKit) and properties
+are computed from the structure→property rules in ``properties.py`` together with noise.
 
-تاریخچه اصلاحات: نسخه اولیه به‌دلیل فراخوانی ``Descriptors.FractionCsp3`` (نام صحیح:
-``FractionCSP3``) و ``except`` فراگیر، برای *همه* نمونه‌ها توصیف‌گر تصادفی جایگزین می‌کرد
-(سیگنال ساختار-خاصیت صفر، فقط ~۱۵۰ SMILES متمایز). در این نسخه ریشه مشکل برطرف شده و
-خطای RDKit دیگر بی‌صدا بلعیده نمی‌شود.
+Correction history: the initial version, due to calling ``Descriptors.FractionCsp3`` (correct name:
+``FractionCSP3``) and a blanket ``except``, substituted random descriptors for *all* samples
+(zero structure-property signal, only ~150 distinct SMILES). In this version the root problem is fixed and
+the RDKit error is no longer silently swallowed.
 
 See docs/SRS.md §8.
 """
@@ -24,7 +24,7 @@ from ..featurization import extended_dict, parse_smiles, smiles_to_graph
 from ..generation.library import CombinatorialLibrary
 from .properties import biological_truth, physicochemical_truth
 
-# ستون‌های هدف فیزیکوشیمیایی/زیستی (مرجع مشترک آموزش واحدهای ۲ و ۳)
+# Physicochemical/biological target columns (shared reference for training Units 2 and 3)
 PHYSICO_TARGETS = (
     "phys_size_nm",
     "phys_zeta_potential_mV",
@@ -56,11 +56,11 @@ _DESCRIPTOR_KEYS = (
 
 class SyntheticDataGenerator:
     """
-    تولیدکننده داده‌های سنتتیک برای آموزش مدل‌های IPIND².
+    Synthetic data generator for training IPIND² models.
 
     Args:
-        random_seed: بذر؛ دو اجرا با بذر یکسان دیتاست یکسان می‌دهند.
-        noise: ضریب مقیاس نویز اندازه‌گیری (۱ = پیش‌فرض، ۰ = بدون نویز).
+        random_seed: seed; two runs with the same seed give the same dataset.
+        noise: measurement noise scale factor (1 = default, 0 = no noise).
     """
 
     def __init__(self, random_seed: int = 42, noise: float = 1.0):
@@ -93,7 +93,7 @@ class SyntheticDataGenerator:
         return record
 
     def generate_molecule(self, scaffold_type: Optional[str] = None) -> Dict:
-        """تولید یک نمونه کامل (ساختار + توصیف‌گر + ویژگی‌ها) به‌صورت dict تو در تو."""
+        """Generate one complete sample (structure + descriptors + properties) as a nested dict."""
         library = CombinatorialLibrary(scaffold_type, seed=int(self._rng.integers(0, 2**31 - 1)))
         structures, _ = library.generate(1)
         record = self._record_from_structure(0, structures[0])
@@ -116,10 +116,10 @@ class SyntheticDataGenerator:
         verbose: bool = False,
     ) -> pd.DataFrame:
         """
-        تولید دیتاست کامل با تعداد نمونه مشخص.
+        Generate the full dataset with a given number of samples.
 
-        ساختارها یکتا هستند؛ اگر فضای ساختاری از ``n_samples`` کوچک‌تر باشد
-        (مثلاً کلاس فلزی با تعداد زیاد نمونه) تکرار مجاز می‌شود تا درخواست برآورده شود.
+        Structures are unique; if the structural space is smaller than ``n_samples``
+        (e.g., the metal class with a large number of samples) duplicates are allowed so the request is fulfilled.
         """
         library = CombinatorialLibrary(
             scaffold_type, seed=int(self._rng.integers(0, 2**31 - 1))
@@ -142,11 +142,11 @@ class SyntheticDataGenerator:
 
     def _add_pareto_labels(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        برچسب‌های پارتو با مرتب‌سازی نامغلوب واقعی (نه آستانه‌گذاری امتیاز).
+        Pareto labels with true non-dominated sorting (not score thresholding).
 
-        اهداف (حداکثرسازی): بارگذاری، جذب سلولی، ایمنی (−سمیت) و نزدیکی اندازه به
-        بازه مطلوب (۸۰–۱۲۰ nm)، و پایداری. ``pareto_score`` همان امتیاز وزنی قبلی است و
-        برای سازگاری حفظ شده.
+        Objectives (maximize): loading, cellular uptake, safety (−toxicity) and closeness of size to
+        the desired range (80–120 nm), and stability. ``pareto_score`` is the same previous weighted score and
+        is retained for compatibility.
         """
         from ..optimization.pareto import pareto_ranks
         from ..optimization.objectives import default_objective_matrix
@@ -171,7 +171,7 @@ class SyntheticDataGenerator:
         return df
 
     def save_dataset(self, df: pd.DataFrame, filepath: str = "synthetic_dataset.csv") -> str:
-        """ذخیره دیتاست در فایل CSV."""
+        """Save the dataset to a CSV file."""
         df.to_csv(filepath, index=False)
         print(f"Dataset saved to {filepath}")
         print(f"Total samples: {len(df)}")
@@ -182,9 +182,9 @@ class SyntheticDataGenerator:
 
     def generate_for_gnn(self, n_samples: int = 50000) -> Dict:
         """
-        داده آماده آموزش GNN: گراف هر مولکول + بردار هدف *همان نمونه*.
+        Data ready for GNN training: the graph of each molecule + the target vector of *that same sample*.
 
-        (نسخه قبلی برای همه گراف‌ها هدف ردیف اول را می‌گذاشت.)
+        (The previous version assigned the first row's target to all graphs.)
         """
         df = self.generate_dataset(n_samples)
         graphs, kept = [], []
@@ -199,7 +199,7 @@ class SyntheticDataGenerator:
 
 
 def main():
-    """اجرای اصلی برای تولید دیتاست (با ابعاد قابل‌تنظیم از خط فرمان)."""
+    """Main entry point for generating the dataset (with adjustable dimensions from the command line)."""
     import argparse
 
     parser = argparse.ArgumentParser(description="IPIND² synthetic dataset generator")

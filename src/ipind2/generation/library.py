@@ -1,11 +1,11 @@
 """
-تولید کتابخانه مجازی ساختارها (FR-01).
+Virtual structure library generation (FR-01).
 
-``CombinatorialLibrary`` قالب‌های ``building_blocks`` را نمونه‌برداری یا شمارش می‌کند و
-خروجی را با RDKit اعتبارسنجی و یکتاسازی می‌کند. سنجه‌های FR-01 (تعداد، نرخ اعتبار،
-تنوع اسکلت) در ``LibraryStats`` گزارش می‌شوند تا در CI قابل‌سنجش باشند.
+``CombinatorialLibrary`` samples or enumerates the ``building_blocks`` templates and
+validates and deduplicates the output with RDKit. The FR-01 measures (count, validity rate,
+scaffold diversity) are reported in ``LibraryStats`` so they can be measured in CI.
 
-See docs/SRS.md §4.1 (FR-01), NFR-04 (زمان تولید)، NFR-08 (مقیاس‌پذیری).
+See docs/SRS.md §4.1 (FR-01), NFR-04 (generation time), NFR-08 (scalability).
 """
 
 import itertools
@@ -32,7 +32,7 @@ from .building_blocks import (
 
 @dataclass
 class GeneratedStructure:
-    """یک ساختار تولیدشده همراه با منشأ (provenance) آن."""
+    """A generated structure together with its provenance."""
 
     smiles: str
     scaffold_type: str
@@ -60,7 +60,7 @@ class GeneratedStructure:
 
 @dataclass
 class LibraryStats:
-    """سنجه‌های یک اجرای تولید کتابخانه — مبنای بررسی انطباق با FR-01/NFR-04."""
+    """Measures of one library generation run — the basis for checking conformance with FR-01/NFR-04."""
 
     requested: int
     proposed: int
@@ -68,11 +68,11 @@ class LibraryStats:
     unique: int
     elapsed_seconds: float
     distinct_skeletons: int = 0
-    attempts: int = 0  # تعداد تلاش/بازیابی خام (برای مولد شرطی، شامل تکراری‌ها)
+    attempts: int = 0  # number of raw attempts/retrievals (for the conditional generator, including duplicates)
 
     @property
     def validity_rate(self) -> float:
-        """نرخ ساختارهای معتبر RDKit در میان پیشنهادهای مدل (هدف FR-01: > ۰.۹۵)."""
+        """Rate of RDKit-valid structures among the model's proposals (FR-01 target: > 0.95)."""
         return self.valid / self.proposed if self.proposed else 0.0
 
     @property
@@ -94,12 +94,12 @@ class LibraryStats:
 
 class CombinatorialLibrary:
     """
-    نمونه‌بردار/شمارنده فضای ساختاری نانوحامل.
+    Sampler/enumerator of the nanocarrier structural space.
 
     Args:
-        scaffold_type: محدودکردن به یک کلاس اسکلت ('lipid'|'polymer'|'metal')؛
-            ``None`` یعنی همه کلاس‌ها.
-        seed: بذر تصادفی برای بازتولیدپذیری (الزام تکرارپذیری آزمایش‌ها).
+        scaffold_type: restrict to one scaffold class ('lipid'|'polymer'|'metal');
+            ``None`` means all classes.
+        seed: random seed for reproducibility (experiment repeatability requirement).
     """
 
     def __init__(
@@ -110,21 +110,21 @@ class CombinatorialLibrary:
         template_weighting: str = "uniform",
     ):
         if scaffold_type is not None and scaffold_type not in SCAFFOLD_TYPES:
-            raise ValueError(f"scaffold_type نامعتبر: {scaffold_type!r}")
+            raise ValueError(f"Invalid scaffold_type: {scaffold_type!r}")
         self.scaffold_type = scaffold_type
         self.templates: List[StructureTemplate] = templates_for(scaffold_type)
         if not self.templates:
-            raise ValueError("هیچ قالب ساختاری برای این نوع اسکلت یافت نشد")
+            raise ValueError("No structural template was found for this scaffold type")
         self._rng = random.Random(seed)
         self._template_index = {t.name: i for i, t in enumerate(self.templates)}
         self._combinations = [t.combination_count() for t in self.templates]
-        # دو لایه وزن‌دهی:
-        #  • ``balance_classes``: سهم هر کلاس اسکلت برابر (وگرنه کلاس فلزی با ~۸٪ فضا، کم‌نماینده می‌ماند)؛
-        #  • ``template_weighting``: ``'uniform'`` (پیش‌فرض) هر قالبِ یک کلاس را هم‌شانس می‌کند؛
-        #    ``'space'`` متناسب با اندازه فضای قالب. با 'space' قالب سه‌دمی lipidoid (~۱٫۲M ترکیب)
-        #    ≈۹۵٪ لیپیدها را می‌گرفت و آمونیوم‌های چهارتایی/فسفولیپیدها عملاً نمونه نمی‌شدند.
+        # Two weighting layers:
+        #  • ``balance_classes``: equal share for each scaffold class (otherwise the metal class, with ~8% of the space, stays under-represented);
+        #  • ``template_weighting``: ``'uniform'`` (default) makes every template within a class equally likely;
+        #    ``'space'`` is proportional to template space size. With 'space' the three-tail lipidoid template (~1.2M combinations)
+        #    took ≈95% of lipids and quaternary ammoniums/phospholipids were effectively never sampled.
         if template_weighting not in ("uniform", "space"):
-            raise ValueError("template_weighting باید uniform یا space باشد")
+            raise ValueError("template_weighting must be uniform or space")
         per_class: Dict[str, List[int]] = {}
         for index, t in enumerate(self.templates):
             per_class.setdefault(t.scaffold_type, []).append(index)
@@ -140,14 +140,14 @@ class CombinatorialLibrary:
 
     @property
     def space_size(self) -> int:
-        """اندازه نظری فضای ساختاری قابل‌دسترس."""
+        """Theoretical size of the reachable structural space."""
         return theoretical_library_size(self.scaffold_type)
 
     def _effective_weights(self, used: List[int]) -> List[float]:
         """
-        وزن قالب‌ها با کسر «باقی‌مانده فضا». قالب‌های کوچک (۴۸–۳۶۸ ترکیب) با وزن یکنواخت
-        زود اشباع می‌شوند و فقط تکراری برمی‌گردانند؛ وزن هر قالب با پر‌شدن فضایش کم و در
-        اشباع صفر می‌شود تا درخواست‌های بزرگ (۱۰۰k ساختار یکتا) بن‌بست نخورند.
+        Template weights by the "remaining space" fraction. Small templates (48–368 combinations) with uniform weight
+        saturate quickly and return only duplicates; each template's weight decreases as its space fills and
+        becomes zero at saturation so that large requests (100k unique structures) do not deadlock.
         """
         return [
             w * max(0.0, 1.0 - u / c) for w, u, c in zip(self._weights, used, self._combinations)
@@ -161,7 +161,7 @@ class CombinatorialLibrary:
         return template.build(choices), template, choices
 
     def propose_many(self, n: int) -> Iterator[Tuple[str, StructureTemplate, Dict[str, str]]]:
-        """پیشنهاد خام (بدون اعتبارسنجی) — برای سنجش نرخ اعتبار مدل مولد."""
+        """Raw proposal (without validation) — for measuring the generative model's validity rate."""
         for _ in range(n):
             yield self._propose()
 
@@ -174,17 +174,17 @@ class CombinatorialLibrary:
         track_skeletons: bool = False,
     ) -> Tuple[List[GeneratedStructure], LibraryStats]:
         """
-        تولید ``n`` ساختار معتبر (و پیش‌فرض: یکتا).
+        Generate ``n`` valid structures (and by default: unique).
 
         Args:
-            with_descriptors: محاسبه بردار توصیف‌گر RDKit برای هر ساختار (کندتر).
-            unique: حذف تکراری‌ها بر پایه SMILES کانونیک.
-            max_attempt_factor: حداکثر تلاش = ``n * max_attempt_factor`` (محافظ در برابر
-                درخواست بیش از اندازه فضای ساختاری).
-            track_skeletons: شمارش اسکلت‌های متمایز (سنجه تنوع FR-01؛ کندتر).
+            with_descriptors: compute the RDKit descriptor vector for each structure (slower).
+            unique: remove duplicates based on canonical SMILES.
+            max_attempt_factor: maximum attempts = ``n * max_attempt_factor`` (guard against a
+                request larger than the structural space).
+            track_skeletons: count distinct scaffolds (FR-01 diversity measure; slower).
         """
         if n <= 0:
-            raise ValueError("n باید مثبت باشد")
+            raise ValueError("n must be positive")
 
         started = time.perf_counter()
         structures: List[GeneratedStructure] = []
@@ -200,7 +200,7 @@ class CombinatorialLibrary:
             if proposed and proposed % refresh_every == 0:
                 refreshed = self._effective_weights(used)
                 if sum(refreshed) <= 0:
-                    break  # کل فضا اشباع شد؛ ساختار یکتای بیشتری وجود ندارد
+                    break  # the whole space is saturated; no more unique structures exist
                 weights = refreshed
             smiles, template, choices = self._propose(weights)
             proposed += 1
@@ -240,10 +240,10 @@ class CombinatorialLibrary:
 
     def enumerate_all(self, limit: Optional[int] = None) -> Iterator[GeneratedStructure]:
         """
-        شمارش قطعی (deterministic) فضای ساختاری — برای ساخت کتابخانه seed کامل.
+        Deterministic enumeration of the structural space — for building the full seed library.
 
-        برخلاف ``generate`` که نمونه‌برداری تصادفی می‌کند، این متد فضا را به‌ترتیب و
-        بدون تکرار پیمایش می‌کند (مناسب NFR-08: ≥۱ میلیون ساختار).
+        Unlike ``generate`` which samples randomly, this method traverses the space in order and
+        without repetition (suitable for NFR-08: ≥1 million structures).
         """
         produced = 0
         for template in self.templates:
@@ -272,7 +272,7 @@ def generate_library(
     with_descriptors: bool = False,
     track_skeletons: bool = False,
 ) -> Tuple[List[GeneratedStructure], LibraryStats]:
-    """تابع راحتی برای یک اجرای تولید کتابخانه مجازی (FR-01)."""
+    """Convenience function for one virtual library generation run (FR-01)."""
     library = CombinatorialLibrary(scaffold_type=scaffold_type, seed=seed)
     return library.generate(
         n, with_descriptors=with_descriptors, track_skeletons=track_skeletons
@@ -280,14 +280,14 @@ def generate_library(
 
 
 def structures_to_dataframe(structures: Sequence[GeneratedStructure]):
-    """تبدیل خروجی تولید به ``pandas.DataFrame`` (برای درج در پایگاه داده/خروجی CSV)."""
+    """Convert the generation output to a ``pandas.DataFrame`` (for database insertion/CSV output)."""
     import pandas as pd
 
     return pd.DataFrame([s.to_dict() for s in structures])
 
 
 def descriptor_matrix_of(structures: Iterable[GeneratedStructure]) -> np.ndarray:
-    """ماتریس توصیف‌گر ساختارها؛ در صورت نبودِ توصیف‌گر، محاسبه می‌شود."""
+    """Descriptor matrix of the structures; computed if descriptors are missing."""
     rows = []
     for structure in structures:
         if structure.descriptors is None:

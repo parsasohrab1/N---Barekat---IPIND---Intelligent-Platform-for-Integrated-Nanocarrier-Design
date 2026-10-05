@@ -1,11 +1,11 @@
 """
-مدل‌های مولد شرطی روی فضای ویژگی مولکولی: Conditional VAE و Conditional GAN (FR-01).
+Conditional generative models on the molecular feature space: Conditional VAE and Conditional GAN (FR-01).
 
-هر دو مدل بردار ویژگی استانداردشده مولکول (توصیف‌گر + گروه عاملی) را به‌شرط «ویژگی
-هدف + نوع اسکلت» مدل می‌کنند. خروجی مدل یک *بردار ویژگی هدف* است؛ تبدیل آن به SMILES
-معتبر با بازیابی نزدیک‌ترین همسایه در فضای قالب‌های معتبر انجام می‌شود
-(``conditional.py``). این طراحی عمداً نرخ اعتبار ۱۰۰٪ می‌دهد و تنها بخش «چه چیزی
-تولید شود» را یاد می‌گیرد.
+Both models model the standardized molecule feature vector (descriptors + functional group) conditioned on "target
+features + scaffold type". The model output is a *target feature vector*; converting it to a valid
+SMILES is done by nearest-neighbor retrieval in the valid template space
+(``conditional.py``). This design deliberately yields a 100% validity rate and only learns the "what should be
+generated" part.
 """
 
 import torch
@@ -23,7 +23,7 @@ def _mlp(in_dim: int, hidden: int, out_dim: int, depth: int = 2) -> nn.Sequentia
 
 
 class ConditionalVAE(nn.Module):
-    """VAE شرطی: q(z|x,c) و p(x|z,c) با نمونه‌برداری reparameterized."""
+    """Conditional VAE: q(z|x,c) and p(x|z,c) with reparameterized sampling."""
 
     def __init__(self, feature_dim: int, cond_dim: int, latent_dim: int = 8, hidden: int = 128):
         super().__init__()
@@ -58,7 +58,7 @@ class ConditionalVAE(nn.Module):
 
 
 class ConditionalGAN(nn.Module):
-    """GAN شرطی (non-saturating) با مولد G(z,c) و متمایزکننده D(x,c)."""
+    """Conditional GAN (non-saturating) with generator G(z,c) and discriminator D(x,c)."""
 
     def __init__(self, feature_dim: int, cond_dim: int, latent_dim: int = 8, hidden: int = 128):
         super().__init__()

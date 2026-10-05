@@ -1,4 +1,4 @@
-"""تست‌های featurization و تولید داده سنتتیک (شامل رگرسیون باگ‌های کشف‌شده)."""
+"""Tests of featurization and synthetic data generation (including regressions of discovered bugs)."""
 
 import numpy as np
 import pytest
@@ -66,14 +66,14 @@ class TestFeaturization:
         graphs = [smiles_to_graph("CCO"), smiles_to_graph(QUAT)]
         nodes, adjacency, mask = batch_graphs(graphs)
         assert nodes.shape[0] == 2 and mask[0].sum() == graphs[0].n_atoms and mask[1].sum() == graphs[1].n_atoms
-        assert adjacency[0, graphs[0].n_atoms :, :].sum() == 0  # padding بدون یال
+        assert adjacency[0, graphs[0].n_atoms :, :].sum() == 0  # padding has no edges
 
     def test_canonical_smiles_unifies_equivalent_inputs(self):
         assert canonical_smiles("OCC") == canonical_smiles("C(O)C")
 
     def test_generic_framework_separates_topologies_not_atoms(self):
-        assert generic_framework("CCCCO") == generic_framework("CCCCN")  # فقط نوع اتم فرق دارد
-        assert generic_framework("CCCCO") != generic_framework("CC(C)CO")  # توپولوژی متفاوت
+        assert generic_framework("CCCCO") == generic_framework("CCCCN")  # only the atom type differs
+        assert generic_framework("CCCCO") != generic_framework("CC(C)CO")  # different topology
 
     def test_skeleton_and_validity_metrics(self):
         assert count_distinct_skeletons(["CCCC", "CCCCC", "CC(C)C", "bad(("]) == 3
@@ -86,7 +86,7 @@ class TestFeaturization:
 
 class TestSyntheticDataGenerator:
     def test_regression_descriptors_come_from_the_actual_structure(self, small_dataset):
-        """باگ قبلی: Descriptors.FractionCsp3 وجود نداشت و توصیف‌گرها تصادفی می‌شدند."""
+        """Previous bug: Descriptors.FractionCsp3 did not exist and descriptors became random."""
         for _, row in small_dataset.head(30).iterrows():
             expected = descriptor_vector(row["smiles"])
             assert row["desc_mol_weight"] == pytest.approx(float(expected[0]), rel=1e-4)
@@ -94,7 +94,7 @@ class TestSyntheticDataGenerator:
             assert row["desc_fraction_csp3"] == pytest.approx(float(expected[7]), abs=1e-4)
 
     def test_regression_structures_are_diverse_and_valid(self, small_dataset):
-        assert small_dataset["smiles"].nunique() == len(small_dataset)  # قبلاً ~۱۵۰ مورد متمایز از ۱۰۰k
+        assert small_dataset["smiles"].nunique() == len(small_dataset)  # previously ~150 distinct out of 100k
         assert all(is_valid_smiles(s) for s in small_dataset["smiles"])
 
     def test_all_three_scaffold_classes_represented(self, small_dataset):
@@ -118,8 +118,8 @@ class TestSyntheticDataGenerator:
         quats = small_dataset[small_dataset["smiles"].str.contains(r"\[N\+\]")]
         others = small_dataset[~small_dataset["smiles"].str.contains(r"\[N\+\]")]
         assert len(quats) > 5
-        assert quats["phys_zeta_potential_mV"].mean() > others["phys_zeta_potential_mV"].mean()  # کاتیونی ⇒ زتای بالاتر
-        assert quats["bio_cytotoxicity_ic50_ug_ml"].mean() < others["bio_cytotoxicity_ic50_ug_ml"].mean()  # سمی‌تر
+        assert quats["phys_zeta_potential_mV"].mean() > others["phys_zeta_potential_mV"].mean()  # cationic ⇒ higher zeta
+        assert quats["bio_cytotoxicity_ic50_ug_ml"].mean() < others["bio_cytotoxicity_ic50_ug_ml"].mean()  # more toxic
 
     def test_deterministic_for_same_seed(self):
         a = SyntheticDataGenerator(5).generate_dataset(60, include_pareto_labels=False)
@@ -146,10 +146,10 @@ class TestSyntheticDataGenerator:
             assert not any(dominates(other, point) for other in values)
 
     def test_generate_for_gnn_has_per_molecule_targets(self):
-        """باگ قبلی: هدف هر گراف، ردیف اول دیتافریم بود."""
+        """Previous bug: every graph's target was the first row of the dataframe."""
         data = SyntheticDataGenerator(2).generate_for_gnn(40)
         assert data["targets"].shape == (len(data["graphs"]), len(PHYSICO_TARGETS))
-        assert data["targets"][:, 0].std() > 0, "همه اهداف یکسان‌اند ⇒ باگ هدف ردیف اول"
+        assert data["targets"][:, 0].std() > 0, "All targets are identical ⇒ first-row target bug"
         assert [g.smiles for g in data["graphs"]] == data["dataframe"]["smiles"].tolist()
 
     def test_single_molecule_api(self):

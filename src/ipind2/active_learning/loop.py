@@ -1,11 +1,11 @@
 """
-حلقه یادگیری فعال: دریافت نتایج آزمایشگاهی → بافر → fine-tuning با Early Stopping (FR-06).
+Active learning loop: receive lab results → buffer → fine-tuning with Early Stopping (FR-06).
 
-نتایج جدید از ``lab_automation.ingest_results`` (جدول ``experimental_results``) وارد
-می‌شوند. آستانه به‌روزرسانی همان بازه SRS است (۱۰–۵۰ داده جدید). آزمایش معمولاً فقط ۴ از
-۱۲ ویژگی را اندازه می‌گیرد؛ fine-tuning با loss ماسک‌شده روی همان سطرهای جزئی انجام می‌شود
-و برای جلوگیری از «فراموشی فاجعه‌بار» با نمونه‌هایی از داده آموزش اولیه (replay) ترکیب
-می‌شود.
+New results enter from ``lab_automation.ingest_results`` (the ``experimental_results`` table). The update
+threshold is the same SRS range (10–50 new data points). An experiment usually measures only 4 of
+12 properties; fine-tuning is done with a masked loss on those same partial rows
+and, to prevent "catastrophic forgetting", is mixed with samples from the initial training data (replay)
+.
 """
 
 from dataclasses import dataclass, field
@@ -21,7 +21,7 @@ from ..lab_automation.ingestion import (
 )
 from ..nn.predictor import EnsemblePropertyPredictor
 
-# نگاشت ستون جدول experimental_results به ستون‌های هدف مدل‌ها
+# Mapping of experimental_results table columns to the models' target columns
 EXPERIMENTAL_TO_TARGET: Dict[str, str] = {
     "experimental_size_nm": "phys_size_nm",
     "experimental_zeta_potential": "phys_zeta_potential_mV",
@@ -32,7 +32,7 @@ EXPERIMENTAL_TO_TARGET: Dict[str, str] = {
 
 @dataclass
 class RoundReport:
-    """گزارش یک دور به‌روزرسانی مدل."""
+    """Report of one model update round."""
 
     round: int
     n_new: int
@@ -42,7 +42,7 @@ class RoundReport:
     metrics_after: Dict[str, float] = field(default_factory=dict)
 
     def improved(self) -> bool:
-        """آیا میانگین RMSE نرمال‌شده روی holdout کم شده است (اگر holdout داده شده باشد)."""
+        """Whether the mean normalized RMSE on the holdout decreased (if a holdout was given)."""
         if not self.metrics_before or not self.metrics_after:
             return False
         return np.mean(list(self.metrics_after.values())) < np.mean(list(self.metrics_before.values()))
@@ -50,13 +50,13 @@ class RoundReport:
 
 class ActiveLearningLoop:
     """
-    هماهنگ‌کننده بازخورد آزمایشگاهی برای یک یا چند پیش‌بین (واحدهای ۲ و ۳).
+    Laboratory feedback coordinator for one or more predictors (Units 2 and 3).
 
     Args:
-        predictors: نام → پیش‌بین (مثلاً ``{"physico": ..., "bio": ...}``).
-        molecule_lookup: نگاشت ``molecule_id`` به SMILES (معمولاً از جدول ``molecules``).
-        replay: داده آموزش اولیه (ستون ``smiles`` + همه اهداف) برای جلوگیری از فراموشی.
-        min_batch / max_batch: بازه SRS برای دفعات به‌روزرسانی (۱۰–۵۰).
+        predictors: name → predictor (e.g., ``{"physico": ..., "bio": ...}``).
+        molecule_lookup: mapping of ``molecule_id`` to SMILES (usually from the ``molecules`` table).
+        replay: initial training data (``smiles`` column + all targets) to prevent forgetting.
+        min_batch / max_batch: SRS range for update frequency (10–50).
     """
 
     def __init__(
@@ -70,9 +70,9 @@ class ActiveLearningLoop:
         seed: int = 0,
     ):
         if not predictors:
-            raise ValueError("حداقل یک پیش‌بین لازم است")
+            raise ValueError("At least one predictor is required")
         if min_batch > max_batch:
-            raise ValueError("min_batch نباید از max_batch بزرگ‌تر باشد")
+            raise ValueError("min_batch must not be greater than max_batch")
         self.predictors = dict(predictors)
         self.molecule_lookup = molecule_lookup
         self.replay = replay
@@ -87,15 +87,15 @@ class ActiveLearningLoop:
     # ------------------------------------------------------------------
     @property
     def pending(self) -> int:
-        """تعداد نتایج آزمایشگاهی جدید که هنوز به مدل‌ها نرسیده‌اند."""
+        """Number of new lab results that have not yet reached the models."""
         return len(self._buffer)
 
     def ingest(self, results: pd.DataFrame) -> int:
         """
-        افزودن نتایج جدید (DataFrame منطبق بر ``experimental_results``) به بافر.
+        Add new results (a DataFrame matching ``experimental_results``) to the buffer.
 
-        سطرهای بدون ``molecule_id`` شناخته‌شده یا بدون هیچ مقدار قابل‌استفاده رد می‌شوند.
-        Returns: تعداد سطر پذیرفته‌شده.
+        Rows without a known ``molecule_id`` or without any usable value are rejected.
+        Returns: number of accepted rows.
         """
         accepted = 0
         for _, row in results.iterrows():
@@ -115,7 +115,7 @@ class ActiveLearningLoop:
         return accepted
 
     def ready(self) -> bool:
-        """آیا بافر به آستانه به‌روزرسانی (≥ min_batch) رسیده است."""
+        """Whether the buffer has reached the update threshold (≥ min_batch)."""
         return should_trigger_retrain(self.pending, self.min_batch)
 
     # ------------------------------------------------------------------
@@ -142,11 +142,11 @@ class ActiveLearningLoop:
         learning_rate: float = 3e-4,
     ) -> Optional[RoundReport]:
         """
-        Fine-tuning با Early Stopping روی بافر فعلی (اگر به آستانه رسیده یا ``force``).
+        Fine-tuning with Early Stopping on the current buffer (if the threshold is reached or ``force``).
 
         Args:
-            holdout: داده ارزیابی (smiles + اهداف) برای گزارش RMSE نرمال‌شده قبل/بعد.
-        Returns: ``RoundReport`` یا ``None`` اگر هنوز زود است.
+            holdout: evaluation data (smiles + targets) for reporting normalized RMSE before/after.
+        Returns: ``RoundReport`` or ``None`` if it is still too early.
         """
         if not self._buffer or not (force or self.ready()):
             return None
@@ -187,7 +187,7 @@ class ActiveLearningLoop:
         return report
 
     def _holdout_metrics(self, holdout: pd.DataFrame) -> Dict[str, float]:
-        """RMSE نرمال‌شده (بر انحراف‌معیار آموزشی) هر هدفِ موجود در holdout."""
+        """Normalized RMSE (by training standard deviation) of each target present in the holdout."""
         metrics: Dict[str, float] = {}
         for predictor in self.predictors.values():
             columns = [c for c in predictor.target_names if c in holdout.columns]

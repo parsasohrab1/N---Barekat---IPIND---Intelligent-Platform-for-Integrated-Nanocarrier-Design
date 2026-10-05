@@ -1,12 +1,12 @@
 """
-اعتبارسنجی نهایی کاندیداها با شبیه‌سازی (FR-05).
+Final validation of candidates with simulation (FR-05).
 
-برای هر کاندیدا یک مسیر شبیه‌سازی می‌گیرد و چهار خاصیت SRS §4.5 را استخراج می‌کند:
-انرژی (MM-GBSA یا نماینده MMFF)، شعاع ژیراسیون، SASA و پارامتر ترازوی سفارش.
+For each candidate a simulation trajectory is obtained and the four SRS §4.5 properties are extracted:
+energy (MM-GBSA or MMFF proxy), radius of gyration, SASA and order parameter.
 
-``MDValidation.fidelity`` همیشه سطح واقعی شبیه‌سازی را ثبت می‌کند. گزارش نهایی
-(``ValidationReport.md_complete``) فقط وقتی ``True`` است که **همه** کاندیداها با موتور
-MD واقعی و حداقل مدت ``min_ns`` (پیش‌فرض ۱۰۰ ns، طبق SRS) شبیه‌سازی شده باشند.
+``MDValidation.fidelity`` always records the real simulation level. The final report
+(``ValidationReport.md_complete``) is ``True`` only when **all** candidates have been simulated with a real
+MD engine and for at least ``min_ns`` (default 100 ns, per the SRS).
 """
 
 from dataclasses import dataclass, field
@@ -33,7 +33,7 @@ def _masses(elements: Sequence[str]) -> np.ndarray:
 
 @dataclass
 class MDValidation:
-    """نتیجه اعتبارسنجی یک کاندیدا."""
+    """Validation result of one candidate."""
 
     smiles: str
     engine: str
@@ -73,7 +73,7 @@ class ValidationReport:
 
     @property
     def md_complete(self) -> bool:
-        """آیا همه کاندیداها با MD واقعی و ≥ ۱۰۰ ns اعتبارسنجی شده‌اند (الزام SRS)."""
+        """Whether all candidates were validated with real MD and ≥ 100 ns (SRS requirement)."""
         return bool(self.results) and not self.skipped and all(r.meets_sim_time for r in self.results)
 
     def stable(self) -> List[MDValidation]:
@@ -88,10 +88,10 @@ class ValidationReport:
 def analyze_trajectory(
     trajectory: Trajectory, max_rg_cv: float = 0.35
 ) -> MDValidation:
-    """استخراج Rg، SASA، پارامتر ترازو و انرژی از یک مسیر.
+    """Extract Rg, SASA, order parameter and energy from one trajectory.
 
-    ``stable`` یعنی ضریب تغییرات Rg کمتر از ``max_rg_cv`` است — معیار غربالگری ساده برای
-    «ساختار در طول شبیه‌سازی فرو نپاشید/باز نشد»، نه یک آستانه شیمیایی کالیبره‌شده.
+    ``stable`` means the coefficient of variation of Rg is less than ``max_rg_cv`` — a simple screening criterion for
+    "the structure did not collapse/unfold during the simulation", not a calibrated chemical threshold.
     """
     elements = trajectory.elements
     radii = _vdw_radii(elements)
@@ -122,9 +122,9 @@ def analyze_trajectory(
     rg_cv = float(rg.std() / rg_mean) if rg_mean > 0 else float("inf")
     notes: List[str] = []
     if trajectory.fidelity != "md":
-        notes.append("نتیجه از نمونه‌برداری کانفورمری است، نه MD؛ برای الزام FR-05 کافی نیست.")
+        notes.append("The result is from conformer sampling, not MD; insufficient for the FR-05 requirement.")
     elif trajectory.simulated_ns < REQUIRED_MD_NS:
-        notes.append(f"مدت شبیه‌سازی {trajectory.simulated_ns} ns < {REQUIRED_MD_NS} ns (الزام SRS).")
+        notes.append(f"Simulation duration {trajectory.simulated_ns} ns < {REQUIRED_MD_NS} ns (SRS requirement).")
 
     return MDValidation(
         smiles=trajectory.smiles,
@@ -152,13 +152,13 @@ def validate_candidates(
     fallback_to_conformers: bool = False,
 ) -> ValidationReport:
     """
-    اعتبارسنجی ۵–۱۰ کاندیدای برتر (SRS §4.5).
+    Validation of the top 5–10 candidates (SRS §4.5).
 
     Args:
-        engine: موتور شبیه‌سازی؛ ``None`` یعنی ``ConformerEnsembleEngine``.
-        fallback_to_conformers: اگر موتور MD در دسترس نبود، به‌جای شکست از نمونه‌برداری
-            کانفورمری استفاده کن. نتیجه همچنان ``fidelity='conformer_ensemble'`` دارد و
-            ``ValidationReport.md_complete`` را ``True`` نمی‌کند.
+        engine: simulation engine; ``None`` means ``ConformerEnsembleEngine``.
+        fallback_to_conformers: if the MD engine is unavailable, use conformer sampling
+            instead of failing. The result still has ``fidelity='conformer_ensemble'`` and does not
+            set ``ValidationReport.md_complete`` to ``True``.
     """
     engine = engine or ConformerEnsembleEngine()
     fallback = ConformerEnsembleEngine()

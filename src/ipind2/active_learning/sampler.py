@@ -1,9 +1,9 @@
 """
-نمونه‌برداری آگاه از عدم‌قطعیت + Query-by-Committee (FR-06).
+Uncertainty-aware sampling + Query-by-Committee (FR-06).
 
-معیار عدم‌قطعیت = واریانس پیش‌بینی بین اعضای ensemble (SRS §4.6). برای اینکه چند ساختار
-بسیار مشابه هم‌زمان برای آزمایش پیشنهاد نشود (هزینه واقعی آزمایش!)، انتخاب نهایی با
-farthest-first در فضای ویژگی، تنوع را هم لحاظ می‌کند.
+Uncertainty measure = prediction variance among ensemble members (SRS §4.6). To avoid proposing several very
+similar structures for experiment at the same time (the real cost of experiments!), the final selection uses
+farthest-first in feature space, which also accounts for diversity.
 """
 
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -18,22 +18,22 @@ def committee_uncertainty(
     predictors: Sequence[EnsemblePropertyPredictor], smiles: Sequence[str]
 ) -> Tuple[np.ndarray, List[int]]:
     """
-    امتیاز عدم‌قطعیت هر ساختار: میانگین انحراف‌معیار نرمال‌شده بین اعضای ensemble.
+    Uncertainty score of each structure: mean normalized standard deviation among ensemble members.
 
-    انحراف‌معیار هر هدف بر انحراف‌معیار آموزشی همان هدف تقسیم می‌شود تا اهداف با
-    مقیاس‌های متفاوت (nm در برابر PDI) سهم یکسانی داشته باشند.
+    Each target's standard deviation is divided by that target's training standard deviation so that targets with
+    different scales (nm vs. PDI) have an equal share.
 
     Returns:
-        (امتیازها به طول تعداد ساختار معتبر، اندیس ساختارهای معتبر در ورودی)
+        (scores of length equal to the number of valid structures, indices of valid structures in the input)
     """
     if not predictors:
-        raise ValueError("حداقل یک پیش‌بین لازم است")
+        raise ValueError("At least one predictor is required")
     per_predictor: List[np.ndarray] = []
     kept: Optional[List[int]] = None
     for predictor in predictors:
         members, valid = predictor.member_predictions(smiles)
         if len(predictor.models) < 2:
-            raise ValueError("Query-by-Committee به ensemble با حداقل ۲ عضو نیاز دارد")
+            raise ValueError("Query-by-Committee requires an ensemble with at least 2 members")
         spread = members.std(axis=0, ddof=1) / predictor.scaler.std[None, :]
         per_predictor.append(spread.mean(axis=1))
         kept = valid
@@ -41,11 +41,11 @@ def committee_uncertainty(
 
 
 def _farthest_first(features: np.ndarray, scores: np.ndarray, n: int) -> List[int]:
-    """انتخاب n نقطه: شروع از پرعدم‌قطعیت‌ترین، سپس دورترین از انتخاب‌شده‌ها."""
+    """Select n points: start from the most uncertain, then the farthest from those already selected."""
     chosen = [int(np.argmax(scores))]
     distances = np.linalg.norm(features - features[chosen[0]], axis=1)
     while len(chosen) < min(n, len(features)):
-        # ترکیب فاصله و عدم‌قطعیت؛ از امتیاز صفر جلوگیری می‌کنیم که نقطه تکراری برنگردد
+        # Combine distance and uncertainty; avoid a zero score so a duplicate point is not returned
         priority = distances * (scores + 1e-9)
         priority[chosen] = -np.inf
         nxt = int(np.argmax(priority))
@@ -63,24 +63,24 @@ def select_samples(
     seed: int = 0,
 ) -> List[int]:
     """
-    انتخاب n ساختار برای آزمایش بعدی.
+    Select n structures for the next experiment.
 
     Args:
-        strategy: ``'hybrid'`` (پیش‌فرض: نیمی تصادفی برای پوشش توزیع + نیمی
-            diverse-uncertainty)، ``'diverse_uncertainty'``، ``'uncertainty'`` یا
-            ``'random'``. در آزمایش shift شدید توزیع (مدل آموزش‌دیده روی لیپید، داده
-            جدید پلیمر)، uncertainty خالص از random بدتر بود (نمونه‌های پرت)؛ بنابراین
-            پیش‌فرض ترکیبی است. نگاه کنید به docs/MODEL_VALIDATION.md.
-        candidate_factor: در حالت diverse، ابتدا ``n × factor`` پرعدم‌قطعیت‌ترین انتخاب
-            و سپس از میان آن‌ها با farthest-first n تا برگزیده می‌شود.
+        strategy: ``'hybrid'`` (default: half random for distribution coverage + half
+            diverse-uncertainty), ``'diverse_uncertainty'``, ``'uncertainty'`` or
+            ``'random'``. In the severe distribution shift experiment (model trained on lipids, new data
+            polymer), pure uncertainty was worse than random (outlier samples); therefore
+            the default is hybrid. See docs/MODEL_VALIDATION.md.
+        candidate_factor: in diverse mode, first the ``n × factor`` most uncertain are selected
+            and then n are chosen from among them with farthest-first.
 
     Returns:
-        اندیس‌های انتخاب‌شده در فهرست ورودی ``smiles``.
+        Selected indices in the input ``smiles`` list.
     """
     if n <= 0:
-        raise ValueError("n باید مثبت باشد")
+        raise ValueError("n must be positive")
     if strategy not in ("uncertainty", "diverse_uncertainty", "random", "hybrid"):
-        raise ValueError(f"strategy ناشناخته: {strategy!r}")
+        raise ValueError(f"Unknown strategy: {strategy!r}")
 
     if strategy == "random":
         _, valid = extended_matrix(smiles)

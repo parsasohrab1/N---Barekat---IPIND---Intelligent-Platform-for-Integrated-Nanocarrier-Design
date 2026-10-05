@@ -1,4 +1,4 @@
-"""استانداردسازی و تعامل‌پذیری داده: FAIR + دسته‌های MIRIBEL. See docs/SRS.md §2.1 (FR-13)."""
+"""Data standardization and interoperability: FAIR + MIRIBEL categories. See docs/SRS.md §2.1 (FR-13)."""
 
 from .export import (
     CompletenessReport,

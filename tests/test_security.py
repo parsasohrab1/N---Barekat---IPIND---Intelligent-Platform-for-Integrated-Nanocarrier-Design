@@ -1,4 +1,4 @@
-"""تست‌های امنیت: SEC-01 (2FA)، SEC-02 (AES-256)، SEC-04 (لاگ)، SEC-05 (RBAC)، SEC-06 (پشتیبان)."""
+"""Security tests: SEC-01 (2FA), SEC-02 (AES-256), SEC-04 (log), SEC-05 (RBAC), SEC-06 (backup)."""
 
 import base64
 import sqlite3
@@ -144,7 +144,7 @@ class TestAuthentication:
             for _ in range(5):
                 with pytest.raises(AuthError):
                     svc.login("alice", "WrongPassword123", "000000")
-            # حتی با اعتبارنامه درست، حساب قفل است
+            # Even with correct credentials, the account is locked
             with pytest.raises(AuthError):
                 svc.login("alice", GOOD_PASSWORD, pyotp.TOTP(secret).now())
 
@@ -239,7 +239,7 @@ class TestBackup:
 
         backup = backup_database(f"sqlite:///{database}", str(tmp_path / "backups"), encryption_key)
         assert backup.suffix == ".enc"
-        assert not list((tmp_path / "backups").glob("*.dump")), "نسخه ساده نباید باقی بماند"
+        assert not list((tmp_path / "backups").glob("*.dump")), "The plain copy must not remain"
         assert b"SQLite format" not in backup.read_bytes()
 
         restored = tmp_path / "restored.db"

@@ -1,14 +1,14 @@
 """
-رمزنگاری داده در حالت ذخیره‌سازی — AES-256-GCM (SEC-02).
+Encryption of data at rest — AES-256-GCM (SEC-02).
 
-کلید ۳۲ بایتی از متغیر محیطی ``IPIND_ENCRYPTION_KEY`` (base64) خوانده می‌شود. برنامه
-عمداً **بدون کلید شروع به رمزنگاری نمی‌کند** (fail-closed): نبود کلید در تولید باید به‌صورت
-خطا دیده شود، نه اینکه داده بی‌صدا ساده ذخیره شود.
+The 32-byte key is read from the ``IPIND_ENCRYPTION_KEY`` environment variable (base64). The application
+deliberately **does not start encrypting without a key** (fail-closed): a missing key in production should be seen as
+an error, not data silently stored in plain text.
 
-قالب خروجی: ``version(1B) || nonce(12B) || ciphertext+tag``؛ بایت نسخه، چرخش کلید/الگوریتم
-در آینده را بدون شکستن داده‌های قدیمی ممکن می‌کند. ``aad`` (associated data) رمزنص را به
-زمینه‌اش (مثلاً نام کاربر یا شناسه رکورد) می‌بندد تا جابه‌جایی ciphertext بین رکوردها
-شناسایی شود.
+Output format: ``version(1B) || nonce(12B) || ciphertext+tag``; the version byte makes future key/algorithm
+rotation possible without breaking old data. ``aad`` (associated data) binds the ciphertext to its
+context (e.g., username or record ID) so that moving ciphertext between records
+is detected.
 """
 
 import base64
@@ -25,11 +25,11 @@ _NONCE_BYTES = 12
 
 
 class EncryptionError(RuntimeError):
-    """خطای رمزنگاری/رمزگشایی (کلید نبود، داده دستکاری‌شده، ...)."""
+    """Encryption/decryption error (missing key, tampered data, ...)."""
 
 
 def generate_key() -> str:
-    """کلید تصادفی AES-256 به‌صورت base64 (برای ذخیره در secret manager)."""
+    """Random AES-256 key as base64 (for storing in a secret manager)."""
     return base64.b64encode(AESGCM.generate_key(bit_length=256)).decode("ascii")
 
 
@@ -37,14 +37,14 @@ def _load_key(key: Optional[str]) -> bytes:
     raw = key if key is not None else os.environ.get(KEY_ENV)
     if not raw:
         raise EncryptionError(
-            f"کلید رمزنگاری تنظیم نشده است؛ متغیر محیطی {KEY_ENV} را (base64، ۳۲ بایت) مقداردهی کنید."
+            f"Encryption key is not set; set the environment variable {KEY_ENV} (base64, 32 bytes)."
         )
     try:
         decoded = base64.b64decode(raw, validate=True)
     except Exception as exc:
-        raise EncryptionError("کلید رمزنگاری base64 معتبر نیست") from exc
+        raise EncryptionError("Encryption key is not valid base64") from exc
     if len(decoded) != 32:
-        raise EncryptionError(f"کلید باید دقیقاً ۳۲ بایت (AES-256) باشد، نه {len(decoded)}")
+        raise EncryptionError(f"Key must be exactly 32 bytes (AES-256), not {len(decoded)}")
     return decoded
 
 
@@ -56,16 +56,16 @@ def encrypt_bytes(plaintext: bytes, key: Optional[str] = None, aad: Optional[byt
 
 def decrypt_bytes(blob: bytes, key: Optional[str] = None, aad: Optional[bytes] = None) -> bytes:
     if len(blob) < 1 + _NONCE_BYTES + 16 or blob[:1] != _VERSION:
-        raise EncryptionError("قالب داده رمزشده نامعتبر است")
+        raise EncryptionError("Encrypted data format is invalid")
     nonce = blob[1 : 1 + _NONCE_BYTES]
     try:
         return AESGCM(_load_key(key)).decrypt(nonce, blob[1 + _NONCE_BYTES :], aad)
     except InvalidTag as exc:
-        raise EncryptionError("رمزگشایی ناموفق: کلید اشتباه یا داده دستکاری‌شده") from exc
+        raise EncryptionError("Decryption failed: wrong key or tampered data") from exc
 
 
 def encrypt_text(text: str, key: Optional[str] = None, aad: Optional[str] = None) -> str:
-    """رمزنگاری رشته؛ خروجی base64 مناسب ذخیره در ستون متنی پایگاه داده."""
+    """Encrypt a string; the output is base64 suitable for storing in a database text column."""
     blob = encrypt_bytes(text.encode("utf-8"), key, aad.encode("utf-8") if aad else None)
     return base64.b64encode(blob).decode("ascii")
 
@@ -76,7 +76,7 @@ def decrypt_text(token: str, key: Optional[str] = None, aad: Optional[str] = Non
 
 
 def encrypt_file(source: str, destination: str, key: Optional[str] = None) -> Path:
-    """رمزنگاری یک فایل (مثلاً پشتیبان یا خروجی CSV) با AES-256-GCM."""
+    """Encrypt a file (e.g., backup or CSV output) with AES-256-GCM."""
     data = Path(source).read_bytes()
     out = Path(destination)
     out.write_bytes(encrypt_bytes(data, key, aad=out.name.encode("utf-8")))

@@ -1,4 +1,4 @@
-"""امنیت و حریم خصوصی: 2FA، RBAC، رمزنگاری AES-256، TLS 1.3، پشتیبان‌گیری. See docs/SRS.md §6 (SEC-01..SEC-06)."""
+"""Security and privacy: 2FA, RBAC, AES-256 encryption, TLS 1.3, backup. See docs/SRS.md §6 (SEC-01..SEC-06)."""
 
 from .auth import (
     PERMISSIONS,

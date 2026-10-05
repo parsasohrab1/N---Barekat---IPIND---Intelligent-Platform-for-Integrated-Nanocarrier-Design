@@ -1,4 +1,4 @@
-# موتورهای MD و کش — فقط برای استقرار تولید (نگاه کنید به docs/OPERATIONS.md)
+# MD engines and cache — only for production deployment (see docs/OPERATIONS.md)
 redis>=5.0
 psycopg2-binary>=2.9
 openmm>=8.1

@@ -1,4 +1,4 @@
-"""تست‌های واحد ۱: کتابخانه ترکیبیاتی، مولد شرطی، کتابخانه seed (FR-01، NFR-04، NFR-08، NFR-10)."""
+"""Unit 1 tests: combinatorial library, conditional generator, seed library (FR-01, NFR-04, NFR-08, NFR-10)."""
 
 import time
 
@@ -24,7 +24,7 @@ class TestCombinatorialLibrary:
     @pytest.mark.parametrize("scaffold_type", SCAFFOLD_TYPES)
     def test_validity_above_fr01_threshold_per_class(self, scaffold_type):
         structures, stats = generate_library(400, scaffold_type=scaffold_type, seed=1)
-        assert stats.validity_rate > 0.95  # الزام FR-01
+        assert stats.validity_rate > 0.95  # FR-01 requirement
         assert all(s.scaffold_type == scaffold_type for s in structures)
 
     def test_every_template_yields_valid_smiles(self):
@@ -41,7 +41,7 @@ class TestCombinatorialLibrary:
 
     def test_skeleton_diversity_meets_fr01(self):
         _, stats = generate_library(1200, seed=3, track_skeletons=True)
-        assert stats.distinct_skeletons >= 500  # الزام FR-01: ≥۵۰۰ اسکلت متمایز
+        assert stats.distinct_skeletons >= 500  # FR-01 requirement: ≥500 distinct scaffolds
 
     def test_reproducible_with_seed(self):
         a, _ = generate_library(50, seed=7)
@@ -52,7 +52,7 @@ class TestCombinatorialLibrary:
     def test_class_balancing_by_default(self):
         structures, _ = generate_library(900, seed=4)
         counts = pd.Series([s.scaffold_type for s in structures]).value_counts(normalize=True)
-        assert counts.min() > 0.2  # بدون تعادل، فلزی ≈ ۸٪ می‌شد
+        assert counts.min() > 0.2  # without balancing, metal would be ≈ 8%
 
     def test_provenance_recorded(self):
         structure = generate_library(5, seed=1)[0][0]
@@ -62,18 +62,18 @@ class TestCombinatorialLibrary:
         assert theoretical_library_size() >= 1_000_000
 
     def test_throughput_supports_nfr04(self):
-        """NFR-04: ۱۰۰k ساختار در <۱۰ دقیقه ⇒ حداقل ~۱۷۰ ساختار/ثانیه؛ با حاشیه امن."""
+        """NFR-04: 100k structures in <10 minutes ⇒ at least ~170 structures/second; with a safety margin."""
         started = time.perf_counter()
         _, stats = generate_library(3000, seed=5)
         rate = stats.unique / (time.perf_counter() - started)
-        assert rate > 400, f"نرخ {rate:.0f}/s برای رساندن ۱۰۰k به <۱۰ دقیقه کافی نیست"
+        assert rate > 400, f"A rate of {rate:.0f}/s is not enough to bring 100k under 10 minutes"
 
     def test_regression_small_templates_saturate_without_blocking_large_requests(self):
         """
-        باگ کشف‌شده در اعتبارسنجی NFR-04: با وزن یکنواخت ایستا، قالب‌های کوچک (۴۸–۳۶۸ ترکیب)
-        زود اشباع می‌شدند و درخواست ۱۰۰k فقط ~۷۹k ساختار یکتا می‌داد. دو قالب کوچک (جمعاً ۴۱۶
-        ترکیب) را جدا می‌کنیم و ۱۸۰ ساختار یکتا می‌خواهیم؛ سامپلر ایستا روی هر ۶ بذر آزمایشی
-        کمتر از ۱۸۰ می‌داد (۱۵۴–۱۶۹)، سامپلر وفقی همه را تحویل می‌دهد.
+        Bug discovered in NFR-04 validation: with static uniform weighting, small templates (48–368 combinations)
+        saturated quickly and a request for 100k gave only ~79k unique structures. We isolate two small templates (416
+        combinations in total) and ask for 180 unique structures; the static sampler gave
+        fewer than 180 on all 6 trial seeds (154–169), the adaptive sampler delivers them all.
         """
         for seed in (1, 2, 3, 4):
             library = CombinatorialLibrary("metal", seed=seed)
@@ -127,7 +127,7 @@ class TestConditionalGenerator:
         assert history[-1] < 0.5 * history[0]
 
     def test_condition_steers_output(self, trained_generator):
-        """شرط اندازه باید توزیع اندازه خروجی را به سمت هدف جابه‌جا کند (نسبت به شرط مخالف)."""
+        """The size condition must shift the output size distribution toward the target (relative to the opposite condition)."""
         from ipind2.data_generation.properties import physicochemical_truth
 
         def mean_size(structures):
@@ -162,12 +162,12 @@ class TestConditionalGenerator:
         assert structures
 
     def test_narrow_condition_still_delivers_many_structures(self, trained_generator):
-        """باگ قبلی: شرط باریک → ۴۸ از ۴۰۰ تحویل. اکنون جست‌وجو گسترش می‌یابد."""
+        """Previous bug: narrow condition → 48 of 400 delivered. Now the search widens."""
         structures, stats = trained_generator.generate(200, GenerationCondition("lipid", size_nm=100.0, zeta_mV=5.0, loading_efficiency=65.0, ic50=60.0))
         assert len(structures) >= 120 and stats.attempts >= stats.unique
 
     def test_nlp_bridge(self, trained_generator):
-        params = parse_query("نانوحامل لیپیدی برای تومور، اندازه بین ۸۰ تا ۱۲۰ نانومتر")
+        params = parse_query("A lipid nanocarrier for tumor, size between 80 to 120 nm")
         condition = GenerationCondition.from_target_parameters(params)
         assert condition.scaffold_type == "lipid" and condition.size_nm == 100.0
         structures, _ = trained_generator.generate(20, condition)
@@ -210,7 +210,7 @@ class TestSeedLibrary:
         public = tmp_path / "pubchem.smi"
         public.write_text("# comment\nCCO ethanol\nOCC dup-of-ethanol\nCC(=O)O acetic\nbad(((\n", encoding="utf-8")
         report = build_seed_library(str(tmp_path / "s.parquet"), n=500, public_files=[str(public)], seed=2)
-        assert report.n_public == 2 and report.n_rejected >= 2  # تکراری و نامعتبر رد شد
+        assert report.n_public == 2 and report.n_rejected >= 2  # duplicate and invalid rejected
         assert report.n_total == 500
         assert not report.meets_public_source_requirement
 
@@ -225,4 +225,4 @@ class TestSeedLibrary:
 
     def test_requirement_flags(self, tmp_path):
         report = build_seed_library(str(tmp_path / "s.parquet"), n=1200, seed=3)
-        assert not report.meets_size_requirement  # فقط وقتی ≥۱M
+        assert not report.meets_size_requirement  # only when ≥1M

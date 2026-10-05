@@ -1,18 +1,18 @@
 """
-آموزش، ارزیابی و ثبت نسخه مدل‌ها (چرخه «CI برای مدل‌ها»، FR-12).
+Training, evaluation and registration of model versions (the "CI for models" cycle, FR-12).
 
-استفاده::
+Usage::
 
     python -m ipind2.training.train --profile standard --out models/v1
 
-پروفایل‌ها:
-    smoke     ~۲ دقیقه، فقط برای اطمینان از سالم‌بودن خط لوله (دقت مهم نیست)
-    standard  ~۲۰–۴۰ دقیقه روی CPU؛ دقت قابل‌گزارش در مقابل NFR
-    release   ~۱–۲ ساعت روی CPU؛ داده بیشتر برای نزدیک‌شدن به سقف نویز (پیشنهاد انتشار)
-    full      ~ساعت‌ها؛ داده و epoch بیشتر
+Profiles:
+    smoke     ~2 minutes, only to verify the pipeline is healthy (accuracy does not matter)
+    standard  ~20–40 minutes on CPU; reportable accuracy against NFRs
+    release   ~1–2 hours on CPU; more data to approach the noise ceiling (recommended for release)
+    full      ~hours; more data and epochs
 
-دقت نهایی روی **داده سنتتیک نگه‌داشته‌شده (holdout)** گزارش می‌شود؛ این اثبات دقت روی داده
-تجربی واقعی نیست (docs/MODEL_VALIDATION.md).
+The final accuracy is reported on **held-out synthetic data (holdout)**; this is not proof of accuracy on real
+experimental data (docs/MODEL_VALIDATION.md).
 """
 
 import argparse
@@ -48,17 +48,17 @@ PROFILES: Dict[str, Profile] = {
     "full": Profile(n_train=15000, n_holdout=2000, epochs=60, n_ensemble=5, gen_epochs=150, pool_size=60000),
 }
 
-# اهداف NFR که از روی دقت مدل سنجیده می‌شوند: (ستون، معیار، آستانه، جهت)
+# NFR targets measured from model accuracy: (column, metric, threshold, direction)
 NFR_CHECKS = (
     ("NFR-01", "phys_size_nm", "rmse", 5.0, "lt"),
     ("NFR-02", "phys_zeta_potential_mV", "rmse", 2.0, "lt"),
     ("NFR-03", "phys_drug_loading_efficiency_percent", "r2", 0.85, "gt"),
 )
-BIO_R2_TARGET = 0.85  # SRS §4.3: R² > 0.85 برای تمام ویژگی‌های زیستی
+BIO_R2_TARGET = 0.85  # SRS §4.3: R² > 0.85 for all biological properties
 
 
 def evaluate_nfr(metrics: Dict[str, Dict[str, Dict[str, float]]]) -> Dict[str, Any]:
-    """مقایسه معیارهای holdout با آستانه‌های NFR/SRS؛ نتیجه قابل‌ذخیره در مانیفست."""
+    """Compare holdout metrics with NFR/SRS thresholds; the result can be saved in the manifest."""
     report: Dict[str, Any] = {}
     for nfr, column, metric, threshold, direction in NFR_CHECKS:
         value = metrics["physico"][column][metric]
@@ -76,13 +76,13 @@ def evaluate_nfr(metrics: Dict[str, Dict[str, Dict[str, float]]]) -> Dict[str, A
 
 def noise_ceiling_r2(seed: int = 0, n: int = 1500) -> Dict[str, float]:
     """
-    سقف تقریبی R² هر هدف سنتتیک.
+    Approximate R² ceiling of each synthetic target.
 
-    برای ساختارهای یکسان، هدف بدون نویز و هدف نویزدار ساخته می‌شود و ``R²(نویزدار،
-    بدون‌نویز)`` گزارش می‌شود: بهترین R² ممکن برای هر مدلی که نویز اندازه‌گیری را
-    نمی‌تواند پیش‌بینی کند. اگر R² مدل به این سقف نزدیک باشد، مدل ساختار را کامل یاد
-    گرفته و کمبود R² ناشی از نویز داده است، نه مدل. (برای اهداف زیستی که از مقادیر
-    نویزدار فیزیکوشیمیایی می‌آیند، سقف تقریبی است.)
+    For identical structures, the noise-free and noisy targets are built and ``R²(noisy,
+    noise-free)`` is reported: the best possible R² for any model that cannot predict the measurement
+    noise. If the model's R² is close to this ceiling, the model has fully learned the structure
+    and the R² shortfall is due to data noise, not the model. (For biological targets that come from noisy
+    physicochemical values, the ceiling is approximate.)
     """
     from ..benchmarking.metrics import r_squared
     from ..data_generation.properties import biological_truth, physicochemical_truth
@@ -109,9 +109,9 @@ def noise_ceiling_r2(seed: int = 0, n: int = 1500) -> Dict[str, float]:
 
 
 def train_bundle(profile: str = "standard", seed: int = 2024, verbose: bool = True) -> ModelBundle:
-    """آموزش کامل سه مدل و ارزیابی روی holdout. نسخه = هش پروفایل+بذر+زمان."""
+    """Full training of the three models and evaluation on the holdout. Version = hash of profile+seed+time."""
     if profile not in PROFILES:
-        raise ValueError(f"پروفایل ناشناخته: {profile!r} (مجاز: {', '.join(PROFILES)})")
+        raise ValueError(f"Unknown profile: {profile!r} (allowed: {', '.join(PROFILES)})")
     cfg = PROFILES[profile]
     started = time.time()
 
@@ -121,20 +121,20 @@ def train_bundle(profile: str = "standard", seed: int = 2024, verbose: bool = Tr
 
     data = SyntheticDataGenerator(seed).generate_dataset(cfg.n_train + cfg.n_holdout, include_pareto_labels=False)
     train, holdout = data.iloc[: cfg.n_train], data.iloc[cfg.n_train :]
-    log(f"داده: {len(train)} آموزش / {len(holdout)} holdout")
+    log(f"Data: {len(train)} train / {len(holdout)} holdout")
 
     physico = PhysicochemicalPredictor(n_ensemble=cfg.n_ensemble)
     physico.fit(train.smiles.tolist(), train[list(PHYSICO_TARGET_COLUMNS)].to_numpy(), epochs=cfg.epochs, seed=seed)
-    log("واحد ۲ (GNN) آموزش دید")
+    log("Unit 2 (GNN) trained")
 
     bio = BiologicalPredictor(n_ensemble=cfg.n_ensemble)
     bio.fit(train.smiles.tolist(), train[list(BIO_TARGET_COLUMNS)].to_numpy(), epochs=cfg.epochs, seed=seed)
-    log("واحد ۳ (Transformer+GNN) آموزش دید")
+    log("Unit 3 (Transformer+GNN) trained")
 
     generator = ConditionalStructureGenerator(seed=seed).fit(
         train, pool_size=cfg.pool_size, epochs=cfg.gen_epochs
     )
-    log("واحد ۱ (CVAE+CGAN) آموزش دید")
+    log("Unit 1 (CVAE+CGAN) trained")
 
     metrics = {
         "physico": physico.evaluate(holdout.smiles.tolist(), holdout[list(PHYSICO_TARGET_COLUMNS)].to_numpy()).to_dict("index"),
@@ -145,7 +145,7 @@ def train_bundle(profile: str = "standard", seed: int = 2024, verbose: bool = Tr
     metrics["noise_ceiling_r2"] = noise_ceiling_r2(seed)
     fingerprint = hashlib.sha256(f"{profile}:{seed}:{cfg}".encode()).hexdigest()[:8]
     version = f"{time.strftime('%Y%m%d')}-{profile}-{fingerprint}"
-    log(f"نسخه {version}؛ NFR: " + ", ".join(f"{k}={'✓' if v['passed'] else '✗'}" for k, v in nfr.items()))
+    log(f"Version {version}; NFR: " + ", ".join(f"{k}={'✓' if v['passed'] else '✗'}" for k, v in nfr.items()))
 
     return ModelBundle(
         physico=physico,
@@ -167,7 +167,7 @@ def train_bundle(profile: str = "standard", seed: int = 2024, verbose: bool = Tr
 def main() -> None:
     parser = argparse.ArgumentParser(description="IPIND² model training")
     parser.add_argument("--profile", default="standard", choices=sorted(PROFILES))
-    parser.add_argument("--out", required=True, help="پوشه خروجی بسته مدل")
+    parser.add_argument("--out", required=True, help="Output folder of the model bundle")
     parser.add_argument("--seed", type=int, default=2024)
     args = parser.parse_args()
 

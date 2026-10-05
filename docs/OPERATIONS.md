@@ -1,61 +1,61 @@
-# راهنمای استقرار و عملیات
+# Deployment and Operations Guide
 
-## راه‌اندازی اولیه
+## Initial setup
 
 ```bash
-pip install -r requirements.txt            # + requirements-optional.txt برای PostgreSQL/Redis/OpenMM
-python -m ipind2.training.train --profile standard --out models/v1     # ~۲۰–۳۰ دقیقه روی CPU
+pip install -r requirements.txt            # + requirements-optional.txt for PostgreSQL/Redis/OpenMM
+python -m ipind2.training.train --profile standard --out models/v1     # ~20–30 minutes on CPU
 python -m ipind2.training.validate --model-dir models/v1 --out docs/validation_report.json
 ```
 
-### رازها (هرگز در git یا image نباشند)
+### Secrets (never in git or the image)
 
 ```bash
 export IPIND_JWT_SECRET="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')"
 export IPIND_ENCRYPTION_KEY="$(python -c 'from ipind2.security import generate_key;print(generate_key())')"
-export IPIND_DATABASE_URL="postgresql+psycopg2://ipind:***@db:5432/ipind2"   # پیش‌فرض: SQLite محلی (فقط توسعه)
+export IPIND_DATABASE_URL="postgresql+psycopg2://ipind:***@db:5432/ipind2"   # default: local SQLite (development only)
 export IPIND_MODEL_DIR=models/v1
 ```
 
-- **کلید رمزنگاری را گم نکنید:** راز TOTP کاربران و پشتیبان‌ها با آن رمز شده‌اند؛ بدون کلید قابل بازیابی نیستند. در secret manager نگه دارید و چرخش را برنامه‌ریزی کنید (قالب داده بایت نسخه دارد).
-- بدون `IPIND_JWT_SECRET` (≥ ۳۲ نویسه) ورود کار نمی‌کند و بدون `IPIND_ENCRYPTION_KEY` ساخت کاربر شکست می‌خورد (fail-closed).
+- **Do not lose the encryption key:** users' TOTP secrets and backups are encrypted with it; without the key they cannot be recovered. Keep it in a secret manager and plan rotation (the data format carries a version byte).
+- Without `IPIND_JWT_SECRET` (≥ 32 characters) login does not work, and without `IPIND_ENCRYPTION_KEY` user creation fails (fail-closed).
 
-### اولین کاربر ادمین
+### First admin user
 
 ```bash
 python -m ipind2.api.manage create-user admin --role admin
-# URI خروجی را در برنامه احراز هویت اسکن کنید، سپس:
+# Scan the output URI in an authenticator app, then:
 curl -X POST https://HOST/auth/enroll/confirm -d '{"username":"admin","password":"…","code":"123456"}'
 ```
-تا تأیید TOTP ورود ممکن نیست (SEC-01 برای همه کاربران).
+Login is not possible until TOTP confirmation (SEC-01 for all users).
 
-### اجرا
+### Running
 
 ```bash
 python -m ipind2.api.manage serve --host 0.0.0.0 --port 8443 --certfile c.pem --keyfile k.pem
-# یا docker compose up (nginx با TLS 1.3 + PostgreSQL + Redis؛ deploy/nginx.conf)
+# or docker compose up (nginx with TLS 1.3 + PostgreSQL + Redis; deploy/nginx.conf)
 ```
-اجرا روی رابط غیرمحلی بدون TLS عمداً رد می‌شود (SEC-03).
+Running on a non-local interface without TLS is deliberately rejected (SEC-03).
 
-## پشتیبان‌گیری روزانه (SEC-06)
+## Daily backup (SEC-06)
 
 ```bash
-# cron: 02:00 هر شب
+# cron: 02:00 every night
 0 2 * * * python -c "from ipind2.security import backup_database; backup_database('$IPIND_DATABASE_URL', '/backups', retention=14)"
 ```
-خروجی `ipind2-<زمان>.dump.enc` است (AES-256-GCM)؛ بازیابی با `decrypt_file` و سپس `pg_restore`/کپی SQLite. **یک بازیابی آزمایشی را فصلی تمرین کنید** — پشتیبانی که بازیابی‌اش آزموده نشده، پشتیبان نیست. (تست خودکار بازیابی SQLite موجود است؛ مسیر PostgreSQL به `pg_dump` وابسته و در CI آزموده نمی‌شود.)
+The output is `ipind2-<time>.dump.enc` (AES-256-GCM); restore with `decrypt_file` and then `pg_restore`/SQLite copy. **Practice a test restore quarterly** — a backup whose restore has not been tested is not a backup. (An automated SQLite restore test exists; the PostgreSQL path depends on `pg_dump` and is not tested in CI.)
 
-## ارتقای مدل (FR-12)
+## Model upgrade (FR-12)
 
-۱. آموزش نسخه جدید ⇒ ۲. `ipind2-benchmark --model-dir models/new --history benchmarks/history.json` ⇒ ۳. فقط در صورت PASS جایگزین `models/current`.
-دروازه PASS یعنی: افت نسبی RMSE ≤ ۵٪، افت R² ≤ ۰٫۰۲ نسبت به نسخه قبل **و** برقراری NFR-01/02/03. اگر قوانین تولید داده/مرجع تغییر کند، اثرانگشت مرجع عوض و تاریخچه از نو شروع می‌شود.
+1. Train the new version ⇒ 2. `ipind2-benchmark --model-dir models/new --history benchmarks/history.json` ⇒ 3. Replace `models/current` only on PASS.
+The PASS gate means: relative RMSE degradation ≤ 5%, R² degradation ≤ 0.02 versus the previous version **and** NFR-01/02/03 holding. If the data generation rules/reference change, the reference fingerprint changes and the history starts over.
 
-## بازخورد آزمایشگاهی (FR-06/FR-11)
+## Lab feedback (FR-06/FR-11)
 
-نتایج را با `POST /lab/results` (یا `lab_automation` CSV/REST) ثبت کنید؛ `POST /active-learning/retrain` پس از ۱۰ نتیجه جدید (یا `force`) مدل را fine-tune می‌کند و نتایج را «مصرف‌شده» علامت می‌زند. **هشدار:** replay فعلی داده سنتتیک است؛ در تولید داده آموزش واقعی را به‌عنوان `replay` بدهید تا فراموشی فاجعه‌بار کم شود.
+Record results with `POST /lab/results` (or `lab_automation` CSV/REST); `POST /active-learning/retrain` fine-tunes the model after 10 new results (or `force`) and marks the results as "consumed". **Warning:** the current replay is synthetic data; in production supply real training data as `replay` to reduce catastrophic forgetting.
 
-## محدودیت‌های عملیاتی
+## Operational limitations
 
-- یک پردازه API، کار طراحی را روی thread-pool (پیش‌فرض ۲) اجرا می‌کند؛ برای هم‌زمانی بیشتر چند replica با صف کار (Celery/RQ) اضافه کنید — کد فعلی صف توزیع‌شده ندارد.
-- محدودکننده نرخ (rate limit) فقط قفل حساب پس از ۵ ورود ناموفق است؛ محدودیت IP را در nginx/WAF اعمال کنید.
-- NFR-07 (دسترس‌پذیری ۹۹٫۹٪) به زیرساخت (چند replica، DB با replication، health-check) بستگی دارد و با کد قابل اثبات نیست.
+- A single API process runs design work on a thread pool (default 2); for more concurrency add multiple replicas with a work queue (Celery/RQ) — the current code has no distributed queue.
+- The rate limiter is only account lockout after 5 failed logins; apply IP limiting in nginx/WAF.
+- NFR-07 (99.9% availability) depends on infrastructure (multiple replicas, replicated DB, health checks) and is not provable by code.

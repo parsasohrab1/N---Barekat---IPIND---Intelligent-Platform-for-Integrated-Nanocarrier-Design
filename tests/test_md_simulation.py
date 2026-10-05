@@ -1,4 +1,4 @@
-"""تست‌های واحد ۵ (FR-05): تحلیل مسیر با پاسخ تحلیلی، موتورها و صداقت سطح شبیه‌سازی."""
+"""Unit 5 tests (FR-05): trajectory analysis with an analytical answer, engines and honesty about simulation level."""
 
 import subprocess
 
@@ -63,7 +63,7 @@ class TestAnalysisAgainstAnalyticResults:
         assert radius_of_gyration(ring)[0] == pytest.approx(3.0)
         two = np.array([[0.0, 0, 0], [4.0, 0, 0]])
         assert radius_of_gyration(two, [1.0, 1.0])[0] == pytest.approx(2.0)
-        assert radius_of_gyration(two, [1.0, 3.0])[0] == pytest.approx(np.sqrt(3.0))  # مرکز جرم به اتم سنگین‌تر نزدیک‌تر
+        assert radius_of_gyration(two, [1.0, 3.0])[0] == pytest.approx(np.sqrt(3.0))  # center of mass is closer to the heavier atom
 
     def test_rg_trajectory_shape_and_validation(self):
         assert radius_of_gyration(np.random.default_rng(0).normal(size=(5, 10, 3))).shape == (5,)
@@ -74,7 +74,7 @@ class TestAnalysisAgainstAnalyticResults:
         rng = np.random.default_rng(0)
         assert order_parameter_p2(np.tile([0.0, 0, 1.0], (200, 1)) + rng.normal(0, 0.02, (200, 3))) > 0.98
         assert abs(order_parameter_p2(rng.normal(size=(6000, 3)))) < 0.05
-        assert order_parameter_p2(np.tile([1.0, 0, 0], (50, 1)), director=[0, 0, 1.0]) == pytest.approx(-0.5)  # عمود بر محور
+        assert order_parameter_p2(np.tile([1.0, 0, 0], (50, 1)), director=[0, 0, 1.0]) == pytest.approx(-0.5)  # perpendicular to the axis
         with pytest.raises(ValueError):
             order_parameter_p2(np.zeros((0, 3)))
 
@@ -97,7 +97,7 @@ class TestConformerEngine:
         organic = ConformerEnsembleEngine(n_conformers=3).simulate(self.SMILES)
         assert np.isfinite(organic.energies_kcal).all() and organic.metadata["forcefield"] == "MMFF94"
         gold = ConformerEnsembleEngine(n_conformers=3).simulate("OCCOCCS[Au]")
-        assert np.isnan(gold.energies_kcal).all(), "برای Au انرژی بی‌معنی نباید گزارش شود"
+        assert np.isnan(gold.energies_kcal).all(), "A meaningless energy must not be reported for Au"
 
     def test_same_seed_same_geometry(self):
         a = ConformerEnsembleEngine(n_conformers=3, seed=5).simulate(self.SMILES, ).coords
@@ -181,12 +181,12 @@ class TestEngineAdapters:
         monkeypatch.setattr(subprocess, "run", lambda *a, **k: called.append(a))
         with pytest.raises(MDEngineUnavailable, match="MDAnalysis"):
             GromacsEngine(str(tmp_path)).simulate("CCO")
-        assert not called, "نباید پیش از اطمینان از امکان خواندن نتیجه، شبیه‌سازی گران اجرا شود"
+        assert not called, "The expensive simulation must not run before it is certain the result can be read"
 
     def test_openmm_unavailable_message(self):
         try:
             import openmm  # noqa: F401
-            pytest.skip("OpenMM نصب است")
+            pytest.skip("OpenMM is installed")
         except ImportError:
             with pytest.raises(MDEngineUnavailable):
                 OpenMMEngine().simulate("CCO", duration_ns=0.001)

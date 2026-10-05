@@ -1,15 +1,15 @@
 """
-احراز هویت دو مرحله‌ای، RBAC و توکن جلسه (SEC-01, SEC-04, SEC-05).
+Two-factor authentication, RBAC and session token (SEC-01, SEC-04, SEC-05).
 
-* رمز عبور: bcrypt (cost 12) + سیاست حداقل طول؛
-* عامل دوم: TOTP (RFC 6238) برای **همه** کاربران — ورود پیش از تأیید ثبت‌نام TOTP رد می‌شود؛
-* قفل حساب: ۵ ورود ناموفق پشت‌سرهم → قفل ۱۵ دقیقه‌ای؛
-* توکن: JWT (HS256) با انقضای کوتاه و ادعای نقش؛
-* نقش‌ها: admin / researcher / viewer با نگاشت صریح مجوزها (deny-by-default)؛
-* هر رویداد ورود/رد دسترسی در ``audit_log`` ثبت می‌شود.
+* Password: bcrypt (cost 12) + minimum length policy;
+* Second factor: TOTP (RFC 6238) for **all** users — login before TOTP enrollment confirmation is rejected;
+* Account lockout: 5 consecutive failed logins → 15-minute lock;
+* Token: JWT (HS256) with short expiry and role claim;
+* Roles: admin / researcher / viewer with explicit permission mapping (deny-by-default);
+* Every login/access-denial event is recorded in ``audit_log``.
 
-پاسخ خطای ورود عمداً یکسان است («نام کاربری یا رمز نادرست»)، تا وجود/عدم وجود نام
-کاربری قابل‌حدس نباشد.
+The login error response is deliberately uniform ("incorrect username or password"), so the existence or non-existence of a
+username cannot be guessed.
 """
 
 import os
@@ -37,7 +37,7 @@ ISSUER = "ipind2"
 
 ROLES: Tuple[str, ...] = ("admin", "researcher", "viewer")
 
-# مجوزها؛ هر عمل API باید صریحاً در این جدول باشد (deny-by-default).
+# Permissions; every API action must be explicitly in this table (deny-by-default).
 PERMISSIONS: Dict[str, FrozenSet[str]] = {
     "viewer": frozenset({"read"}),
     "researcher": frozenset({"read", "generate", "predict", "optimize", "validate", "lab_ingest", "active_learning"}),
@@ -48,11 +48,11 @@ PERMISSIONS: Dict[str, FrozenSet[str]] = {
 
 
 class AuthError(Exception):
-    """خطای احراز هویت (پیام عمداً عمومی)."""
+    """Authentication error (message deliberately generic)."""
 
 
 class PermissionDenied(Exception):
-    """کاربر احرازشده مجوز این عمل را ندارد."""
+    """The authenticated user does not have permission for this action."""
 
 
 def _now() -> datetime:
@@ -60,7 +60,7 @@ def _now() -> datetime:
 
 
 def _aware(value: Optional[datetime]) -> Optional[datetime]:
-    """SQLite تاریخ را بدون tzinfo برمی‌گرداند؛ برای مقایسه امن UTC فرض می‌کنیم."""
+    """SQLite returns dates without tzinfo; we assume UTC for safe comparison."""
     if value is not None and value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
@@ -68,9 +68,9 @@ def _aware(value: Optional[datetime]) -> Optional[datetime]:
 
 def validate_password_policy(password: str) -> None:
     if len(password) < MIN_PASSWORD_LENGTH:
-        raise ValueError(f"رمز عبور باید حداقل {MIN_PASSWORD_LENGTH} نویسه باشد")
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
     if password.lower() == password or password.upper() == password or not any(c.isdigit() for c in password):
-        raise ValueError("رمز عبور باید ترکیبی از حروف کوچک و بزرگ و عدد باشد")
+        raise ValueError("Password must combine lowercase and uppercase letters and digits")
 
 
 def hash_password(password: str) -> str:
@@ -88,7 +88,7 @@ _DUMMY_HASH: Optional[str] = None
 
 
 def _dummy_hash() -> str:
-    """هش bcrypt معتبر برای یکسان‌سازی زمان پاسخ کاربر ناموجود (یک‌بار محاسبه می‌شود)."""
+    """A valid bcrypt hash to equalize response time for a nonexistent user (computed once)."""
     global _DUMMY_HASH
     if _DUMMY_HASH is None:
         _DUMMY_HASH = hash_password("timing-equalisation-Placeholder-1")
@@ -98,7 +98,7 @@ def _dummy_hash() -> str:
 def jwt_secret() -> str:
     secret = os.environ.get(JWT_SECRET_ENV)
     if not secret or len(secret) < 32:
-        raise AuthError(f"{JWT_SECRET_ENV} باید حداقل ۳۲ نویسه باشد (تنظیم نشده یا کوتاه است)")
+        raise AuthError(f"{JWT_SECRET_ENV} must be at least 32 characters (not set or too short)")
     return secret
 
 
@@ -125,37 +125,37 @@ def decode_token(token: str, secret: Optional[str] = None) -> Dict:
             options={"require": ["exp", "sub", "role", "iss"]},
         )
     except jwt.PyJWTError as exc:
-        raise AuthError("توکن نامعتبر یا منقضی است") from exc
+        raise AuthError("Token is invalid or expired") from exc
 
 
 def authorize(role: str, permission: str) -> None:
-    """``PermissionDenied`` اگر نقش مجوز را نداشته باشد (نقش ناشناخته = بدون مجوز)."""
+    """``PermissionDenied`` if the role lacks the permission (unknown role = no permission)."""
     if permission not in PERMISSIONS.get(role, frozenset()):
-        raise PermissionDenied(f"نقش «{role}» مجوز «{permission}» را ندارد")
+        raise PermissionDenied(f"Role '{role}' does not have permission '{permission}'")
 
 
 class AuthService:
-    """منطق کاربران، 2FA و ورود روی یک ``Session`` پایگاه داده."""
+    """User logic, 2FA and login on a database ``Session``."""
 
     def __init__(self, session: Session, encryption_key: Optional[str] = None):
         self.session = session
         self.encryption_key = encryption_key
         self.audit = AuditRepository(session)
 
-    # --- مدیریت کاربر ------------------------------------------------
+    # --- User management ------------------------------------------------
     def create_user(self, username: str, password: str, role: str = "viewer") -> Tuple[User, str]:
         """
-        ایجاد کاربر و راز TOTP. ``totp_enabled`` تا تأیید اولین کد ``False`` می‌ماند.
+        Create a user and TOTP secret. ``totp_enabled`` stays ``False`` until the first code is confirmed.
 
-        Returns: (کاربر، URI ثبت‌نام TOTP برای QR در برنامه احراز هویت)
+        Returns: (user, TOTP enrollment URI for the QR code in the authenticator app)
         """
         if role not in ROLES:
-            raise ValueError(f"نقش نامعتبر: {role!r}")
+            raise ValueError(f"Invalid role: {role!r}")
         if not username or len(username) > 64:
-            raise ValueError("نام کاربری نامعتبر است")
+            raise ValueError("Username is invalid")
         validate_password_policy(password)
         if self.session.scalar(select(User).where(User.username == username)) is not None:
-            raise ValueError("این نام کاربری قبلاً ثبت شده است")
+            raise ValueError("This username is already registered")
 
         secret = pyotp.random_base32()
         user = User(
@@ -175,7 +175,7 @@ class AuthService:
         return pyotp.TOTP(secret)
 
     def confirm_totp(self, username: str, code: str) -> bool:
-        """تأیید ثبت‌نام TOTP با اولین کد معتبر؛ سپس ورود برای این کاربر فعال می‌شود."""
+        """Confirm TOTP enrollment with the first valid code; then login is enabled for this user."""
         user = self.session.scalar(select(User).where(User.username == username))
         if user is None or not user.totp_secret_encrypted:
             return False
@@ -186,18 +186,18 @@ class AuthService:
         self.audit.record("totp_enroll_failed", username, status="denied")
         return False
 
-    # --- ورود ----------------------------------------------------------
+    # --- Login ----------------------------------------------------------
     def login(self, username: str, password: str, totp_code: str, ip_address: Optional[str] = None) -> str:
         """
-        ورود با رمز + کد TOTP. توکن JWT برمی‌گرداند یا ``AuthError`` می‌اندازد.
+        Login with password + TOTP code. Returns a JWT token or raises ``AuthError``.
 
-        ترتیب بررسی‌ها طوری است که زمان/پیام پاسخ، وجود کاربر را فاش نکند.
+        The order of checks is such that the response time/message does not reveal user existence.
         """
-        generic = AuthError("نام کاربری، رمز عبور یا کد دومرحله‌ای نادرست است")
+        generic = AuthError("Username, password or two-factor code is incorrect")
         user = self.session.scalar(select(User).where(User.username == username))
 
         if user is None:
-            # هزینه bcrypt را برای کاربر ناموجود هم می‌پردازیم (یکسان‌سازی زمان)
+            # We also pay the bcrypt cost for a nonexistent user (time equalization)
             verify_password(password, _dummy_hash())
             self.audit.record("login", username, status="denied", detail={"reason": "unknown_user"}, ip_address=ip_address)
             raise generic
@@ -205,10 +205,10 @@ class AuthService:
         locked_until = _aware(user.locked_until)
         if locked_until is not None and locked_until > _now():
             self.audit.record("login", username, status="denied", detail={"reason": "locked"}, ip_address=ip_address)
-            raise AuthError("حساب موقتاً قفل شده است؛ بعداً دوباره تلاش کنید")
+            raise AuthError("Account is temporarily locked; try again later")
 
         password_ok = verify_password(password, user.password_hash)
-        # حتی اگر رمز غلط باشد TOTP را هم بررسی می‌کنیم تا شاخه‌ها مشابه رفتار کنند
+        # Even if the password is wrong we also check TOTP so the branches behave similarly
         totp_ok = bool(user.totp_enabled) and self._totp(user).verify(totp_code or "", valid_window=1)
 
         if not user.is_active or not password_ok or not totp_ok:

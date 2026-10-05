@@ -1,8 +1,8 @@
 """
-توابع هدف FR-04: تبدیل ویژگی‌های پیش‌بینی‌شده به ماتریس اهداف (همه حداکثرسازی).
+FR-04 objective functions: converting predicted properties into an objective matrix (all maximization).
 
-اهداف مطابق SRS §4.4: حداکثرسازی کارایی بارگذاری و نفوذ سلولی، حداقل‌سازی سمیت (یعنی
-حداکثرسازی IC50) و اندازه در بازه مطلوب، و حداکثرسازی پایداری.
+Objectives per SRS §4.4: maximize loading efficiency and cellular uptake, minimize toxicity (i.e.,
+maximize IC50) and size within the desired range, and maximize stability.
 """
 
 from typing import Dict, Sequence, Tuple
@@ -18,7 +18,7 @@ OBJECTIVE_NAMES: Tuple[str, ...] = (
     "stability",
 )
 
-# نگاشت هر هدف به ستون دیتافریم
+# Mapping of each objective to a dataframe column
 OBJECTIVE_COLUMNS: Dict[str, str] = {
     "loading_efficiency": "phys_drug_loading_efficiency_percent",
     "cellular_uptake": "bio_cellular_uptake_efficiency_percent",
@@ -31,7 +31,7 @@ DEFAULT_SIZE_RANGE_NM = (80.0, 120.0)
 
 
 def size_fit_score(size_nm, size_range: Tuple[float, float] = DEFAULT_SIZE_RANGE_NM):
-    """امتیاز ۰..۱: ۱ داخل بازه مطلوب، با افت گاوسی بیرون آن."""
+    """Score 0..1: 1 inside the desired range, with Gaussian falloff outside it."""
     size = np.asarray(size_nm, dtype=float)
     low, high = size_range
     width = max((high - low) / 2.0, 1.0)
@@ -43,7 +43,7 @@ def objective_matrix(
     values: Dict[str, Sequence[float]],
     size_range: Tuple[float, float] = DEFAULT_SIZE_RANGE_NM,
 ) -> np.ndarray:
-    """ساخت ماتریس (n, 5) اهداف از دیکشنری ستون‌ها. همه ستون‌ها حداکثرسازی‌اند."""
+    """Build the (n, 5) objective matrix from a dictionary of columns. All columns are maximization."""
     columns = []
     for name in OBJECTIVE_NAMES:
         raw = np.asarray(values[name], dtype=float)
@@ -54,5 +54,5 @@ def objective_matrix(
 def default_objective_matrix(
     df: pd.DataFrame, size_range: Tuple[float, float] = DEFAULT_SIZE_RANGE_NM
 ) -> np.ndarray:
-    """ماتریس اهداف از دیتافریم با ستون‌های استاندارد."""
+    """Objective matrix from a dataframe with the standard columns."""
     return objective_matrix({n: df[c].to_numpy() for n, c in OBJECTIVE_COLUMNS.items()}, size_range)

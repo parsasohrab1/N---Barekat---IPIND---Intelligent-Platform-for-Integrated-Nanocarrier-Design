@@ -1,63 +1,63 @@
-# معماری IPIND²
+# IPIND² Architecture
 
-این سند نگاشت «واحد SRS → کد → رفتار قابل‌آزمون» و تصمیم‌های طراحی را ثبت می‌کند. اعداد دقت در [`MODEL_VALIDATION.md`](MODEL_VALIDATION.md) هستند.
+This document records the mapping "SRS unit → code → testable behavior" and the design decisions. Accuracy numbers are in [`MODEL_VALIDATION.md`](MODEL_VALIDATION.md).
 
-## جریان داده (SRS §3.2)
+## Data flow (SRS §3.2)
 
 ```
-پرس‌وجوی فارسی/انگلیسی ──► nlp_interface.parse_query ──► TargetParameters
+Persian/English query ──► nlp_interface.parse_query ──► TargetParameters
                                                             │
                                    GenerationCondition ◄────┘
                                           │
- generation.ConditionalStructureGenerator (CVAE+CGAN → بازیابی از استخر قالب‌های معتبر)
-                                          │ ساختارهای یکتا و معتبر
+ generation.ConditionalStructureGenerator (CVAE+CGAN → retrieval from a pool of valid templates)
+                                          │ unique, valid structures
         ┌─────────────────────────────────┴───────────────────────┐
         ▼                                                         ▼
  physicochemical.PhysicochemicalPredictor               biological.BiologicalPredictor
- (MPNN + attention readout، ۷ هدف)                      (MPNN + Transformer، ۷ هدف)
-        └────────────── ensemble ⇒ میانگین + σ ────────────────────┘
+ (MPNN + attention readout, 7 targets)                      (MPNN + Transformer, 7 targets)
+        └────────────── ensemble ⇒ mean + σ ────────────────────┘
                                           │
- optimization.ParetoGuidedRL (+ جبهه پارتوی ساختارهای تولیدشده، قیود سخت)
-                                          │ ۱۰–۲۰ کاندیدا
- md_simulation.validate_candidates  (سطح شبیه‌سازی صادقانه ثبت می‌شود)
+ optimization.ParetoGuidedRL (+ Pareto front of generated structures, hard constraints)
+                                          │ 10–20 candidates
+ md_simulation.validate_candidates  (the simulation level is honestly recorded)
                                           │
- pipeline.DesignResult: ۳–۵ کاندیدا + پیش‌بینی + اطمینان + SHAP + attention
+ pipeline.DesignResult: 3–5 candidates + prediction + confidence + SHAP + attention
                                           │
  api (FastAPI) ─ database ─ fair.export ─ active_learning ◄── lab_automation
 ```
 
-## نگاشت واحدها
+## Unit mapping
 
-| واحد | بسته | الگوریتم | نکته طراحی |
+| Unit | Package | Algorithm | Design note |
 |---|---|---|---|
-| ۱ تولید ساختار | `generation` | CVAE + CGAN شرطی روی فضای ویژگی، **بازیابی نزدیک‌ترین همسایه** از استخر قالب‌ها | اعتبار شیمیایی ۱۰۰٪ تضمین‌شده؛ مدل فقط «کدام ناحیه» را یاد می‌گیرد، نه نحو SMILES |
-| ۲ فیزیکوشیمیایی | `physicochemical` | MPNN متراکم + readout attention + ویژگی‌های global | بدون torch-geometric؛ ensemble برای عدم‌قطعیت |
-| ۳ زیستی | `biological` | MPNN + Transformer encoder با ماسک padding | سمیت روی ۳ رده سلولی |
-| ۴ بهینه‌سازی | `optimization` | REINFORCE روی سیاست categorical (قالب → بلوک‌ها)، پاداش = رتبه پارتو + Chebyshev با وزن Dirichlet | معیار همگرایی SRS: ΔHV < ۱٪ در ۱۰۰ تکرار |
-| ۵ شبیه‌سازی | `md_simulation` | آداپتور GROMACS/OpenMM + تحلیل مسیر (Rg، SASA، S₂) | **موتور MD در این مخزن اجرا نشده**؛ نگاه کنید به «محدودیت‌ها» |
-| ۶ یادگیری فعال | `active_learning` | QBC (واریانس ensemble) + fine-tuning با loss ماسک‌شده و replay | استراتژی پیش‌فرض `hybrid` بر پایه آزمایش (نگاه کنید به MODEL_VALIDATION) |
-| ۷ تفسیرپذیری | `interpretability` | attention اتمی + SHAP روی مدل جانشین RandomForest (fidelity گزارش می‌شود) + اطمینان ensemble | تفسیر جانشین ≠ تفسیر شبکه؛ برای همین fidelity همراه خروجی است |
-| ۸ زبان طبیعی | `nlp_interface` | پارسر قانون‌محور آفلاین (فارسی/انگلیسی) | قطعی و بدون وابستگی به LLM |
-| ۹ آزمایشگاه | `lab_automation` | آداپتور CSV/REST → `experimental_results` | اتصال مستقیم به تجهیز خاص: فاز بعد (طبق SRS) |
-| ۱۰ بنچمارک | `benchmarking` | مجموعه مرجع منجمد + تاریخچه + دروازه regression/NFR | دیتاست‌های عمومی با فایل محلی کاربر |
+| 1 Structure generation | `generation` | Conditional CVAE + CGAN on feature space, **nearest-neighbor retrieval** from a template pool | 100% chemical validity guaranteed; the model only learns "which region", not SMILES syntax |
+| 2 Physicochemical | `physicochemical` | Dense MPNN + attention readout + global features | No torch-geometric; ensemble for uncertainty |
+| 3 Biological | `biological` | MPNN + Transformer encoder with padding mask | Toxicity on 3 cell lines |
+| 4 Optimization | `optimization` | REINFORCE on a categorical policy (template → blocks), reward = Pareto rank + Chebyshev with Dirichlet weights | SRS convergence criterion: ΔHV < 1% over 100 iterations |
+| 5 Simulation | `md_simulation` | GROMACS/OpenMM adapter + trajectory analysis (Rg, SASA, S₂) | **The MD engine was not run in this repo**; see "Limitations" |
+| 6 Active learning | `active_learning` | QBC (ensemble variance) + fine-tuning with masked loss and replay | Default strategy `hybrid` based on experiment (see MODEL_VALIDATION) |
+| 7 Interpretability | `interpretability` | Atomic attention + SHAP on a RandomForest surrogate model (fidelity is reported) + ensemble confidence | Surrogate explanation ≠ network explanation; that is why fidelity accompanies the output |
+| 8 Natural language | `nlp_interface` | Offline rule-based parser (Persian/English) | Deterministic and with no LLM dependency |
+| 9 Lab | `lab_automation` | CSV/REST adapter → `experimental_results` | Direct connection to specific equipment: next phase (per SRS) |
+| 10 Benchmark | `benchmarking` | Frozen reference set + history + regression/NFR gate | Public datasets via the user's local file |
 
-## تصمیم‌های مهم و دلیل‌ها
+## Key decisions and reasons
 
-1. **تولید «قالب + بلوک» به‌جای تولید کاراکتری SMILES.** FR-01 اعتبار > ۹۵٪ می‌خواهد. نحو آزاد VAE روی SMILES برای مولکول‌های بلند و بارداری مثل لیپیدها معمولاً زیر این آستانه می‌ماند؛ ساخت از قالب‌های معتبر آن را ساختاری تضمین می‌کند. هزینه: فضای قابل‌تولید به قالب‌های تعریف‌شده محدود است (۱۷ قالب، ≈ ۲٫۵ میلیون ترکیب) و برای شیمی کاملاً نو باید قالب افزود.
-2. **وزن‌دهی یکنواخت قالب‌ها درون هر کلاس.** وزن‌دهی بر اساس اندازه فضا، یک قالب را ≈ ۹۵٪ لیپیدها کرد و آمونیوم‌های چهارتایی (DOTAP-مانند) را عملاً حذف کرد؛ تست `test_physical_trends` آن را آشکار کرد. اکنون هر قالب هم‌شانس است و قالب‌های کاتیونی افزوده شدند.
-3. **ensemble به‌جای شبکه بیزی.** ساده، قابل‌اتکا و همان معیار «واریانس بین مدل‌ها» که SRS §4.6 می‌خواهد.
-4. **جانشین برای SHAP.** ورودی مدل گرافی ترکیبی از گراف و ویژگی است؛ SHAP مستقیم ممکن نیست. جانشین RandomForest + `TreeExplainer` دقیق و سریع است (۰٫۰۳ s به‌جای ۴۰ s با permutation) و `fidelity` (R² خارج‌از‌کیسه) هر تفسیر را همراهی می‌کند.
-5. **امنیت deny-by-default.** هر endpoint یک مجوز نام‌دار می‌خواهد؛ نقش از پایگاه داده خوانده می‌شود نه توکن (غیرفعال/تغییر نقش فوراً اثر می‌کند)؛ خطای ورود عمداً یکسان است؛ رد دسترسی هم در `audit_log` ثبت می‌شود.
-6. **صداقت سطح شبیه‌سازی.** `Trajectory.fidelity` و `ValidationReport.md_complete` تضمین می‌کنند نمونه‌برداری کانفورمری هرگز «MD ≥ ۱۰۰ ns» گزارش نشود (تست‌شده).
+1. **"Template + block" generation instead of character-level SMILES generation.** FR-01 requires validity > 95%. Free-syntax VAEs on SMILES for long, charged molecules such as lipids usually stay below this threshold; building from valid templates guarantees it structurally. Cost: the generable space is limited to the defined templates (17 templates, ≈ 2.5 million combinations) and for entirely new chemistry a template must be added.
+2. **Uniform template weighting within each class.** Weighting by space size made one template ≈ 95% of lipids and effectively eliminated quaternary ammoniums (DOTAP-like); the `test_physical_trends` test revealed it. Now every template is equally likely and cationic templates were added.
+3. **Ensemble instead of a Bayesian network.** Simple, reliable, and exactly the "variance between models" measure that SRS §4.6 requires.
+4. **Surrogate for SHAP.** The graph model's input is a combination of graph and features; direct SHAP is not possible. A RandomForest surrogate + `TreeExplainer` is accurate and fast (0.03 s instead of 40 s with permutation) and `fidelity` (out-of-bag R²) accompanies every explanation.
+5. **Deny-by-default security.** Every endpoint requires a named permission; the role is read from the database, not the token (deactivation/role change takes effect immediately); login failure is deliberately uniform; access denials are also recorded in `audit_log`.
+6. **Honesty about simulation level.** `Trajectory.fidelity` and `ValidationReport.md_complete` guarantee that conformer sampling is never reported as "MD ≥ 100 ns" (tested).
 
-## هم‌زمانی
+## Concurrency
 
-`GraphEncoder` حالت per-call دارد (`prepare`/`batch`). همه عملیات آموزش/پیش‌بینی هر پیش‌بین زیر یک `RLock` سریالی می‌شوند؛ تست `TestConcurrency` درستی نتیجه هم‌زمان را می‌سنجد. برای توان بالاتر در تولید، چند پردازه (workers) با بار مدل مستقل استفاده کنید.
+`GraphEncoder` has per-call state (`prepare`/`batch`). All training/prediction operations of each predictor are serialized under an `RLock`; the `TestConcurrency` test checks the correctness of concurrent results. For higher throughput in production, use multiple processes (workers) with independent model loading.
 
-## محدودیت‌های شناخته‌شده
+## Known limitations
 
-- MD واقعی (GROMACS/OpenMM، ≥ ۱۰۰ ns، CHARMM36) در این مخزن اجرا و اعتبارسنجی نشده است؛ فقط آداپتور و تحلیل مسیر (با پاسخ تحلیلی) آزمون شده‌اند.
-- NFR-09 (شبه‌کوانتومی < ۱ kcal/mol) صرفاً آداپتور xtb است و دقت آن سنجیده نشده.
-- هدف «بافت» (کبد، ریه، ...) فقط ثبت می‌شود؛ توابع هدف فعلی برای بافت خاص نیستند.
-- مدل‌ها روی **داده سنتتیک** آموزش دیده‌اند؛ دقت روی داده تجربی واقعی ناشناخته است.
-- راه‌حل Windows: پیام `access violation` از faulthandler در برخی نشست‌های pytest روی torch 2.1 CPU دیده می‌شود (غیربحرانی، فقط زیر pytest، بی‌اثر بر نتایج).
+- Real MD (GROMACS/OpenMM, ≥ 100 ns, CHARMM36) has not been run and validated in this repo; only the adapter and trajectory analysis (with an analytical answer) are tested.
+- NFR-09 (quasi-quantum < 1 kcal/mol) is merely an xtb adapter and its accuracy has not been measured.
+- The "tissue" target (liver, lung, ...) is only recorded; the current objective functions are not tissue-specific.
+- Models were trained on **synthetic data**; accuracy on real experimental data is unknown.
+- Windows workaround: the `access violation` message from faulthandler is seen in some pytest sessions on torch 2.1 CPU (non-critical, only under pytest, no effect on results).

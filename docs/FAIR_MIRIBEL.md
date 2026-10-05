@@ -1,26 +1,26 @@
-# FAIR و MIRIBEL (FR-13)
+# FAIR and MIRIBEL (FR-13)
 
-ماژول: [`src/ipind2/fair`](../src/ipind2/fair). API: `GET /export/{job_id}?fmt=jsonld|csv`.
+Module: [`src/ipind2/fair`](../src/ipind2/fair). API: `GET /export/{job_id}?fmt=jsonld|csv`.
 
-## وضعیت ادعا
+## Claim status
 
-> **همسو با دسته‌بندی سه‌گانه MIRIBEL** — نه «تأییدشده یا منطبق رسمی».
+> **Aligned with the MIRIBEL three-category classification** — not "officially certified or compliant".
 
-فیلدهای هر دسته (ماده، زیستی، پروتکل) برداشت پروژه از چک‌لیست منتشرشده MIRIBEL (Faria و همکاران، *Nature Nanotechnology* ۲۰۱۸) هستند و **باید پیش از ارائه به شریک/نهاد تنظیم‌گر توسط یک متخصص با چک‌لیست رسمی تطبیق داده شوند**. نگاشت واژگان (`ipind:` namespace) جای‌نگهدار است و باید به دامنه واقعی سازمان تغییر کند.
+The fields of each category (material, biological, protocol) are the project's reading of the published MIRIBEL checklist (Faria et al., *Nature Nanotechnology* 2018) and **must be reconciled with the official checklist by a specialist before being presented to a partner/regulator**. The vocabulary mapping (`ipind:` namespace) is a placeholder and must be changed to the organization's real domain.
 
-## اصول FAIR
+## FAIR principles
 
-| اصل | پیاده‌سازی |
+| Principle | Implementation |
 |---|---|
-| Findable | شناسه پایدار `urn:uuid:` برای هر رکورد؛ فراداده غنی JSON-LD |
-| Accessible | قالب‌های باز JSON-LD و CSV؛ بدون ابزار اختصاصی |
-| Interoperable | واژگان schema.org / QUDT (واحدها) / PROV-O (منشأ) |
-| Reusable | `license` (پیش‌فرض CC-BY-4.0)، **`provenance` برای هر مقدار**، نسخه مدل |
+| Findable | Persistent `urn:uuid:` identifier for each record; rich JSON-LD metadata |
+| Accessible | Open JSON-LD and CSV formats; no proprietary tools |
+| Interoperable | schema.org / QUDT (units) / PROV-O (provenance) vocabularies |
+| Reusable | `license` (default CC-BY-4.0), **`provenance` for every value**, model version |
 
-## منشأ مقدار (مهم‌ترین تصمیم)
+## Value provenance (the most important decision)
 
-هر مقدار `predicted` (با `model_version` اجباری) یا `measured` (با روش) است؛ سازنده `Observation` مقدار پیش‌بینی‌شده بدون نسخه مدل را رد می‌کند و تست ثابت می‌کند خروجی `/export` هیچ پیش‌بینی را «measured» برچسب نمی‌زند. دلیل: نهاد تنظیم‌گر نباید پیش‌بینی مدل را با اندازه‌گیری اشتباه بگیرد.
+Every value is either `predicted` (with mandatory `model_version`) or `measured` (with method); the `Observation` constructor rejects a predicted value without a model version, and a test proves that the `/export` output never labels any prediction as "measured". Reason: a regulator must not confuse a model prediction with a measurement.
 
-## کامل‌بودن
+## Completeness
 
-`validate_record` سهم فیلدهای MIRIBEL پر را برمی‌گرداند. رکوردهایی که فقط از پیش‌بینی ساخته شده‌اند به‌طور طبیعی کامل نیستند (پروتکل، رده سلولی، روش اندازه‌گیری ندارند) و `ipind:miribelMissing` فیلدهای ناقص را فهرست می‌کند؛ پرشدن آن‌ها به داده آزمایشگاهی نیاز دارد (`attach_measurements`).
+`validate_record` returns the share of filled MIRIBEL fields. Records built only from predictions are naturally incomplete (no protocol, cell line, or measurement method) and `ipind:miribelMissing` lists the missing fields; filling them requires lab data (`attach_measurements`).

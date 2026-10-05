@@ -1,9 +1,9 @@
 """
-Transformer + GNN چندوظیفه‌ای برای ویژگی‌های زیستی (FR-03).
+Multi-task Transformer + GNN for biological properties (FR-03).
 
-شاخه گرافی: دو لایه MPNN اطلاعات محلی پیوندها را می‌گیرد؛ سپس یک Transformer encoder
-(self-attention با ماسک padding) وابستگی‌های بلندبرد بین اتم‌ها (مثلاً سر قطبی ↔ دم
-آبگریز) را مدل می‌کند؛ readout توجه‌محور + ویژگی‌های global خروجی را می‌سازد.
+Graph branch: two MPNN layers capture local bond information; then a Transformer encoder
+(self-attention with padding mask) models long-range dependencies between atoms (e.g., polar head ↔ hydrophobic
+tail); an attention-based readout + global features produce the output.
 """
 
 from typing import Sequence
@@ -81,7 +81,7 @@ EnsemblePropertyPredictor.MODEL_FACTORIES["graph_transformer"] = GraphTransforme
 
 
 class BiologicalPredictor(EnsemblePropertyPredictor):
-    """پیش‌بین زیستی (واحد ۳): سمیت روی ۳ رده سلولی + ۴ ویژگی دیگر FR-03."""
+    """Biological predictor (Unit 3): toxicity on 3 cell lines + 4 other FR-03 properties."""
 
     def __init__(
         self,

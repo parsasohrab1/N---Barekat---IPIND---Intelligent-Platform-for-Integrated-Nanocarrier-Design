@@ -30,6 +30,6 @@
     "citation": "LANTERN, arXiv:2507.03209",
     "mlp_morgan_expert_r2": 0.8161,
     "agile_r2": 0.2655,
-    "caveat": "پروتکل split با اینجا یکی نیست؛ مقایسه تقریبی است"
+    "caveat": "The split protocol is not the same as here; the comparison is approximate"
   }
 }

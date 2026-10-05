@@ -1,9 +1,9 @@
 """
-مدل‌های ORM لایه داده (FR-08) — SQLAlchemy 2.0؛ سازگار با PostgreSQL (تولید) و SQLite (توسعه/تست).
+ORM models of the data layer (FR-08) — SQLAlchemy 2.0; compatible with PostgreSQL (production) and SQLite (development/test).
 
-چهار جدول اول ستون‌به‌ستون با ``sql/schema.sql`` یکی است (فقط ``canonical_smiles`` و
-``inchikey`` برای حذف تکراری افزوده شده)؛ بقیه جدول‌ها الزامات SEC-01/04/05، ردیابی نسخه
-مدل (FR-12) و کارهای ناهمگام را پوشش می‌دهند.
+The first four tables are column-for-column identical to ``sql/schema.sql`` (only ``canonical_smiles`` and
+``inchikey`` were added for deduplication); the other tables cover SEC-01/04/05, model version
+tracking (FR-12) and asynchronous jobs.
 """
 
 from datetime import date, datetime, timezone
@@ -104,7 +104,7 @@ class ExperimentalResult(Base):
 
 
 class User(Base):
-    """کاربر پلتفرم (SEC-01 احراز دو مرحله‌ای، SEC-05 نقش‌ها)."""
+    """Platform user (SEC-01 two-factor authentication, SEC-05 roles)."""
 
     __tablename__ = "users"
 
@@ -121,7 +121,7 @@ class User(Base):
 
 
 class AuditLog(Base):
-    """لاگ همه فعالیت‌های کاربران (SEC-04)."""
+    """Log of all user activities (SEC-04)."""
 
     __tablename__ = "audit_log"
 
@@ -136,7 +136,7 @@ class AuditLog(Base):
 
 
 class Job(Base):
-    """کار ناهمگام (تولید/بهینه‌سازی/اعتبارسنجی)."""
+    """Asynchronous job (generation/optimization/validation)."""
 
     __tablename__ = "jobs"
 
@@ -152,7 +152,7 @@ class Job(Base):
 
 
 class ModelVersion(Base):
-    """رجیستری نسخه مدل (مبنای مقایسه نسخه قبلی/جدید در FR-12)."""
+    """Model version registry (basis of previous/new version comparison in FR-12)."""
 
     __tablename__ = "model_versions"
     __table_args__ = (UniqueConstraint("name", "version"),)

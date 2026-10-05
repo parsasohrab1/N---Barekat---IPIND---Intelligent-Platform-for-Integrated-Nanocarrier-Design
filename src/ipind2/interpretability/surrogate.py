@@ -1,14 +1,14 @@
 """
-تفسیر SHAP برای مدل‌های گرافی واحد ۲/۳ از طریق مدل جانشین (surrogate).
+SHAP interpretation for the graph models of Units 2/3 via a surrogate model.
 
-ورودی مدل‌های گرافی ترکیبی از گراف و ویژگی‌های global است و SHAP روی آن‌ها مستقیم قابل‌
-اجرا نیست. روش: یک RandomForest روی ویژگی‌های توصیفی (``EXTENDED_NAMES``) آموزش می‌بیند
-تا **خروجی خود مدل گرافی** را تقلید کند و SHAP روی آن محاسبه می‌شود.
+The input of the hybrid graph models is a combination of graph and global features, and SHAP cannot be run on them
+directly. Method: a RandomForest is trained on the descriptive features (``EXTENDED_NAMES``)
+to mimic the **output of the graph model itself**, and SHAP is computed on it.
 
-⚠️ تفسیر، تفسیرِ جانشین است نه خود شبکه. برای همین ``fidelity`` (R² خارج‌از‌کیسه،
-OOB) همراه هر تفسیر گزارش می‌شود؛ تفسیر با fidelity پایین نباید جدی گرفته شود.
-وزن‌های attention اتمی شبکه (``EnsemblePropertyPredictor.atom_attention``) مکمل
-مستقیم و بدون جانشین‌اند.
+⚠️ The interpretation is that of the surrogate, not the network itself. For this reason ``fidelity`` (out-of-bag R²,
+OOB) is reported with every interpretation; an interpretation with low fidelity should not be taken seriously.
+The network's atomic attention weights (``EnsemblePropertyPredictor.atom_attention``) are a direct
+complement without a surrogate.
 
 See docs/SRS.md §4.7 (FR-09).
 """
@@ -27,11 +27,11 @@ from .shap_explainer import ExplanationResult, FeatureAttribution
 
 @dataclass
 class SurrogateExplanation:
-    """تفسیر یک پیش‌بینی همراه با کیفیت مدل جانشین."""
+    """Interpretation of a prediction together with the quality of the surrogate model."""
 
     target: str
     explanation: ExplanationResult
-    fidelity: float  # R² خارج‌از‌کیسه جانشین نسبت به مدل اصلی
+    fidelity: float  # out-of-bag R² of the surrogate relative to the main model
 
     def to_dict(self, top: int = 5) -> dict:
         return {
@@ -48,12 +48,12 @@ class SurrogateExplanation:
 
 class SurrogateExplainer:
     """
-    تفسیرگر SHAP روی جانشین RandomForest برای یک پیش‌بین چندوظیفه‌ای.
+    SHAP explainer on a RandomForest surrogate for a multi-task predictor.
 
     Args:
-        predictor: ``EnsemblePropertyPredictor`` آموزش‌دیده.
-        pool_smiles: ساختارهای نماینده برای آموزش جانشین (چند صد تا کافی است).
-        targets: اهداف مدنظر؛ ``None`` یعنی همه اهداف پیش‌بین.
+        predictor: trained ``EnsemblePropertyPredictor``.
+        pool_smiles: representative structures for training the surrogate (a few hundred suffice).
+        targets: targets of interest; ``None`` means all predictor targets.
     """
 
     def __init__(
@@ -66,7 +66,7 @@ class SurrogateExplainer:
     ):
         features, kept = extended_matrix(list(pool_smiles))
         if len(kept) < 30:
-            raise ValueError("برای ساخت جانشین حداقل ۳۰ ساختار معتبر لازم است")
+            raise ValueError("At least 30 valid structures are required to build the surrogate")
         self.predictor = predictor
         self.targets = list(targets or predictor.target_names)
         self._frame = pd.DataFrame(features, columns=EXTENDED_NAMES)
@@ -86,13 +86,13 @@ class SurrogateExplainer:
             forest.fit(self._frame.to_numpy(), predictions[target].to_numpy())
             self.surrogates[target] = forest
             self.fidelity[target] = float(forest.oob_score_)
-            # جانشین جنگل تصادفی است ⇒ TreeExplainer دقیق و بسیار سریع‌تر از permutation
+            # The surrogate is a random forest ⇒ TreeExplainer is exact and much faster than permutation
             self._explainers[target] = shap.TreeExplainer(forest, data=background.to_numpy())
 
     def explain(self, smiles: str, target: str) -> Optional[SurrogateExplanation]:
-        """تفسیر پیش‌بینی ``target`` برای یک SMILES؛ ``None`` اگر SMILES نامعتبر باشد."""
+        """Interpretation of the ``target`` prediction for one SMILES; ``None`` if the SMILES is invalid."""
         if target not in self._explainers:
-            raise KeyError(f"هدف ناشناخته: {target!r}")
+            raise KeyError(f"Unknown target: {target!r}")
         vector = extended_vector(smiles)
         if vector is None:
             return None

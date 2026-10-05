@@ -41,7 +41,7 @@ REGISTRY: Dict[str, ReferenceDataset] = {
     ),
     "lantern-hela": ReferenceDataset(
         name="lantern-hela",
-        description="۱۱۰۰ لیپید یونیزه‌شونده با کارایی ترانسفکشن تجربی HeLa (LANTERN/AGILE، data/AGILE.csv، مجوز MIT).",
+        description="1100 ionizable lipids with experimental HeLa transfection efficiency (LANTERN/AGILE, data/AGILE.csv, MIT license).",
         source_url="https://github.com/AsalMehradfar/LANTERN",
         target_column="Target",
     ),

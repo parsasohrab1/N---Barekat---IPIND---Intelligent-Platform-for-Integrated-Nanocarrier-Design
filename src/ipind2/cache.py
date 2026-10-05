@@ -1,9 +1,9 @@
 """
-کش لایه داده (معماری SRS §3.1: «کش (Redis)»).
+Data-layer cache (SRS §3.1 architecture: "Cache (Redis)").
 
-``MemoryCache`` پیش‌فرض (thread-safe با TTL و سقف اندازه) بدون وابستگی خارجی؛
-``RedisCache`` در صورت تنظیم ``IPIND_REDIS_URL`` و نصب ``redis``. هر دو یک رابط دارند و
-فقط مقدار JSON-پذیر نگه می‌دارند (کلید‌ها رشته).
+Default ``MemoryCache`` (thread-safe with TTL and a size cap) with no external dependency;
+``RedisCache`` if ``IPIND_REDIS_URL`` is set and ``redis`` is installed. Both share one interface and
+hold only JSON-serializable values (keys are strings).
 """
 
 import json
@@ -73,13 +73,13 @@ class RedisCache:
 
 
 def make_cache() -> Cache:
-    """Redis اگر ``IPIND_REDIS_URL`` تنظیم و در دسترس باشد؛ وگرنه حافظه محلی."""
+    """Redis if ``IPIND_REDIS_URL`` is set and reachable; otherwise local memory."""
     url = os.environ.get("IPIND_REDIS_URL")
     if url:
         try:
             cache = RedisCache(url)
             cache._client.ping()
             return cache
-        except Exception:  # Redis در دسترس نیست؛ سقوط به حافظه محلی (با ثبت در لاگ توسط فراخوان)
+        except Exception:  # Redis unavailable; fall back to local memory (logged by the caller)
             pass
     return MemoryCache()

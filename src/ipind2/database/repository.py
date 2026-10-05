@@ -1,4 +1,4 @@
-"""عملیات داده سطح بالا (FR-08): ذخیره ساختارها، پیش‌بینی‌ها و نتایج آزمایشگاهی."""
+"""High-level data operations (FR-08): storing structures, predictions and lab results."""
 
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
@@ -16,7 +16,7 @@ from .models import (
     PhysicochemicalProperty,
 )
 
-# نگاشت ستون‌های پیش‌بین به ستون‌های جدول
+# Mapping of predictor columns to table columns
 PHYSICO_COLUMN_MAP = {
     "phys_size_nm": "size_nm",
     "phys_zeta_potential_mV": "zeta_potential_mV",
@@ -36,13 +36,13 @@ BIO_COLUMN_MAP = {
 
 
 class MoleculeRepository:
-    """دسترسی به ساختارها و خواص آن‌ها روی یک ``Session``."""
+    """Access to structures and their properties on a ``Session``."""
 
     def __init__(self, session: Session):
         self.session = session
 
     def add_molecule(self, smiles: str, scaffold_type: Optional[str] = None) -> Optional[Molecule]:
-        """درج مولکول (یکتا بر اساس SMILES کانونیک). ``None`` اگر SMILES نامعتبر باشد."""
+        """Insert a molecule (unique by canonical SMILES). ``None`` if the SMILES is invalid."""
         mol = parse_smiles(smiles)
         if mol is None:
             return None
@@ -68,7 +68,7 @@ class MoleculeRepository:
         return molecule
 
     def add_molecules(self, smiles_list: Iterable[str], scaffold_type: Optional[str] = None) -> List[int]:
-        """درج دسته‌ای؛ شناسه مولکول‌های (جدید یا موجود) معتبر را برمی‌گرداند."""
+        """Batch insert; returns the IDs of the valid molecules (new or existing)."""
         ids = []
         for smiles in smiles_list:
             molecule = self.add_molecule(smiles, scaffold_type)
@@ -77,7 +77,7 @@ class MoleculeRepository:
         return ids
 
     def smiles_by_id(self) -> Dict[int, str]:
-        """نگاشت ``molecule_id → smiles`` برای ``ActiveLearningLoop``."""
+        """Mapping ``molecule_id → smiles`` for ``ActiveLearningLoop``."""
         return {row.id: row.smiles for row in self.session.scalars(select(Molecule))}
 
     def count(self) -> int:
@@ -92,7 +92,7 @@ class MoleculeRepository:
         model_version: Optional[str] = None,
         cell_line: Optional[str] = None,
     ) -> None:
-        """ذخیره خروجی پیش‌بین‌ها (کلیدها با نام ستون‌های پیش‌بین)."""
+        """Store predictor output (keys are predictor column names)."""
         if physico:
             values = {PHYSICO_COLUMN_MAP[k]: float(v) for k, v in physico.items() if k in PHYSICO_COLUMN_MAP}
             self.session.add(
@@ -113,10 +113,10 @@ class MoleculeRepository:
 
     def add_experimental_results(self, results: pd.DataFrame) -> int:
         """
-        درج نتایج آزمایشگاهی (خروجی ``lab_automation.ingest_results``).
+        Insert lab results (output of ``lab_automation.ingest_results``).
 
-        ردیف‌هایی که ``molecule_id`` آن‌ها در پایگاه داده نیست رد می‌شوند.
-        Returns: تعداد درج‌شده.
+        Rows whose ``molecule_id`` is not in the database are rejected.
+        Returns: number inserted.
         """
         known = set(self.session.scalars(select(Molecule.id)))
         added = 0
@@ -153,7 +153,7 @@ class MoleculeRepository:
         return added
 
     def unconsumed_results(self) -> pd.DataFrame:
-        """نتایج آزمایشگاهی که هنوز در به‌روزرسانی مدل مصرف نشده‌اند."""
+        """Lab results that have not yet been consumed in a model update."""
         rows = self.session.scalars(
             select(ExperimentalResult).where(ExperimentalResult.consumed_by_training.is_(False))
         ).all()
@@ -182,7 +182,7 @@ class MoleculeRepository:
 
 
 class AuditRepository:
-    """لاگ فعالیت کاربران (SEC-04)."""
+    """User activity log (SEC-04)."""
 
     def __init__(self, session: Session):
         self.session = session

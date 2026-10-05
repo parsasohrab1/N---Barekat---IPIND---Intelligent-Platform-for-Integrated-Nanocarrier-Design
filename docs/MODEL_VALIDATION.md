@@ -1,85 +1,85 @@
-# اعتبارسنجی مدل‌ها و NFRها
+# Validation of Models and NFRs
 
-> **هشدار اصلی:** همه اعداد دقت این سند روی **داده سنتتیک** (قوانین ساختار→خاصیت + نویز؛ `data_generation/properties.py`) به‌دست آمده‌اند. آن‌ها نشان می‌دهند خط لوله می‌تواند رابطه ساختار-خاصیت را *یاد بگیرد*، نه اینکه روی نانوذره واقعی دقیق است. دقت واقعی فقط با داده تجربی یا دیتاست عمومی (LNP-622/LANCE) سنجیدنی است — نگاه کنید به [`TRL_ASSESSMENT.md`](TRL_ASSESSMENT.md).
+> **Main warning:** All accuracy numbers in this document were obtained on **synthetic data** (structure→property rules + noise; `data_generation/properties.py`). They show that the pipeline can *learn* the structure-property relationship, not that it is accurate on real nanoparticles. Real accuracy can only be measured with experimental data or a public dataset (LNP-622/LANCE) — see [`TRL_ASSESSMENT.md`](TRL_ASSESSMENT.md).
 
-نسخه مدل: `20261003-release-e99cbd64` (پروفایل `release`: ۱۰٬۰۰۰ نمونه آموزش، ۱٬۵۰۰ holdout، ensemble ۳ عضوی). گزارش خام: [`validation_report.json`](validation_report.json). سخت‌افزار: Windows 11، CPU ۸ هسته، بدون GPU، torch 2.1.1.
+Model version: `20261003-release-e99cbd64` (`release` profile: 10,000 training samples, 1,500 holdout, 3-member ensemble). Raw report: [`validation_report.json`](validation_report.json). Hardware: Windows 11, 8-core CPU, no GPU, torch 2.1.1.
 
-## دقت (holdout سنتتیک، n = 1500)
+## Accuracy (synthetic holdout, n = 1500)
 
-| الزام | هدف | نتیجه | وضعیت | سقف نظری* |
+| Requirement | Target | Result | Status | Theoretical ceiling* |
 |---|---|---|---|---|
-| NFR-01 | RMSE اندازه < ۵ nm | **۳٫۲۷ nm** | ✅ | R² ≤ ۰٫۹۸۱ |
-| NFR-02 | RMSE زتا < ۲ mV | **۱٫۵۹ mV** | ✅ | R² ≤ ۰٫۹۸۲ |
-| NFR-03 | R² بارگذاری > ۰٫۸۵ | **۰٫۸۶۸** | ✅ (حاشیه کم) | R² ≤ ۰٫۸۷۹ |
-| FR-03 | R² زیستی > ۰٫۸۵ برای همه | کمینه **۰٫۸۶۹** (TBR)؛ بقیه ۰٫۹۳–۰٫۹۸ | ✅ (حاشیه کم برای TBR) | TBR ≤ ۰٫۸۸۲ |
+| NFR-01 | Size RMSE < 5 nm | **3.27 nm** | ✅ | R² ≤ 0.981 |
+| NFR-02 | Zeta RMSE < 2 mV | **1.59 mV** | ✅ | R² ≤ 0.982 |
+| NFR-03 | Loading R² > 0.85 | **0.868** | ✅ (small margin) | R² ≤ 0.879 |
+| FR-03 | Biological R² > 0.85 for all | Minimum **0.869** (TBR); the rest 0.93–0.98 | ✅ (small margin for TBR) | TBR ≤ 0.882 |
 
-\* سقف نظری = R² بهترین مدلِ ممکن که نویز اندازه‌گیری سنتتیک را نمی‌تواند پیش‌بینی کند (`noise_ceiling_r2`). **آستانه ۰٫۸۵ برای بارگذاری فقط ≈۰٫۰۳ زیر سقف داده است**؛ برقراری NFR-03 در این بنچمارک بیش از هر چیز تابع سطح نویزی است که در تولید داده انتخاب شده. روی مجموعه مرجع منجمد مستقل (n=۵۰۰) مقدار ۰٫۸۶۲ بود؛ اختلاف ۰٫۰۰۶ در حد خطای نمونه است. بنابراین NFR-03 «برقرار اما نه با اطمینان آماری قوی» است.
+\* Theoretical ceiling = R² of the best possible model that cannot predict the synthetic measurement noise (`noise_ceiling_r2`). **The 0.85 threshold for loading is only ≈0.03 below the data ceiling**; whether NFR-03 holds in this benchmark depends more than anything on the noise level chosen in data generation. On the independent frozen reference set (n=500) the value was 0.862; the 0.006 difference is within sampling error. Therefore NFR-03 is "satisfied but not with strong statistical confidence".
 
-PDI (R² ۰٫۹۲) و میزان بارگذاری (۰٫۷۹؛ سقف ۰٫۸۱) در الزامات R² > ۰٫۸۵ نیستند.
+PDI (R² 0.92) and loading content (0.79; ceiling 0.81) are not among the R² > 0.85 requirements.
 
-## عملکرد (اجرای واقعی روی ماشین بالا، بدون بار هم‌زمان)
+## Performance (real run on the machine above, without concurrent load)
 
-| الزام | هدف | اندازه‌گیری | وضعیت |
+| Requirement | Target | Measurement | Status |
 |---|---|---|---|
-| NFR-04 | ۱۰۰k ساختار در < ۱۰ دقیقه | **۶۰٫۹ s**، ۱۰۰٬۰۰۰ یکتا، اعتبار RDKit ۱۰۰٪ | ✅ |
-| NFR-05 | < ۱۰۰ ms برای هر ساختار | **۵٫۴ ms** (هر دو مدل، ensemble ۳) | ✅ |
-| NFR-06 | بهینه‌سازی ۱۰۰۰ کاندیدا < ۱ ساعت | **۱۹٫۵ s** برای ۱٬۹۸۱ کاندیدا (بدون MD) | ✅ |
-| NFR-08 | ≥ ۱M ساختار | فضای ۲٬۵۴۰٬۷۸۰ قالب‌محور | ✅ |
-| NFR-10 | seed ≥ ۱M ساختار مرجع از پایگاه‌های عمومی | ۱٬۰۰۰٬۰۰۰ ساخته شد (۵۵۶ s) اما **۰ ساختار از PubChem/ZINC** | ⚠️ اندازه بله، مبدأ عمومی خیر |
-| NFR-07 | دسترس‌پذیری ۹۹٫۹٪ | با کد قابل اثبات نیست (زیرساخت) | — |
-| NFR-09 | شبه‌کوانتومی < ۱ kcal/mol | فقط آداپتور xtb؛ دقت سنجیده نشده | ❌ اعتبارسنجی نشده |
+| NFR-04 | 100k structures in < 10 minutes | **60.9 s**, 100,000 unique, RDKit validity 100% | ✅ |
+| NFR-05 | < 100 ms per structure | **5.4 ms** (both models, ensemble of 3) | ✅ |
+| NFR-06 | Optimization of 1000 candidates < 1 hour | **19.5 s** for 1,981 candidates (without MD) | ✅ |
+| NFR-08 | ≥ 1M structures | Template-based space of 2,540,780 | ✅ |
+| NFR-10 | Seed ≥ 1M reference structures from public databases | 1,000,000 built (556 s) but **0 structures from PubChem/ZINC** | ⚠️ Size yes, public origin no |
+| NFR-07 | Availability 99.9% | Not provable by code (infrastructure) | — |
+| NFR-09 | Quasi-quantum < 1 kcal/mol | Only an xtb adapter; accuracy not measured | ❌ Not validated |
 
-اندازه‌گیری NFR-06 **MD را شامل نمی‌شود** (MD واقعی اجرا نشده است).
+The NFR-06 measurement **does not include MD** (real MD has not been run).
 
-## بنچمارک روی داده واقعی عمومی (یافته منفی مهم)
+## Benchmark on real public data (important negative finding)
 
-دیتاست: LANTERN/AGILE HeLa — ۱۱۰۰ لیپید یونیزه‌شونده با کارایی ترانسفکشن **تجربی** (`data/AGILE.csv`، [مخزن MIT](https://github.com/AsalMehradfar/LANTERN)؛ فایل همراه مخزن نیست و در `data/external/` دانلود می‌شود). LNP-622 فایل عمومی مستقیم ندارد و LANCE فقط به درخواست از نویسندگان داده می‌شود؛ بنابراین هیچ‌کدام اجرا نشدند. ۳ split تصادفی ۸۰/۲۰:
+Dataset: LANTERN/AGILE HeLa — 1100 ionizable lipids with **experimental** transfection efficiency (`data/AGILE.csv`, [MIT repo](https://github.com/AsalMehradfar/LANTERN); the file is not shipped with the repo and is downloaded into `data/external/`). LNP-622 has no direct public file and LANCE is given only on request from the authors; therefore neither was run. 3 random 80/20 splits:
 
-| مدل | RMSE | R² |
+| Model | RMSE | R² |
 |---|---|---|
-| میانگین ثابت | 3.305 ± 0.102 | −0.008 ± 0.004 |
+| Constant mean | 3.305 ± 0.102 | −0.008 ± 0.004 |
 | RandomForest + Morgan | 2.364 ± 0.070 | **0.482 ± 0.054** |
-| **GNN پلتفرم (ensemble ۳)** | 2.746 ± 0.132 | **0.304 ± 0.030** |
-| مقاله LANTERN: MLP (Morgan+Expert) | — | 0.8161 |
-| مقاله: AGILE | — | 0.2655 |
+| LANTERN paper: MLP (Morgan+Expert) | — | 0.8161 |
+| Paper: AGILE | — | 0.2655 |
+(The paper's split protocol and dataset cleaning are not the same as here; the comparison with the paper is only approximate.)
 
-(پروتکل split و پاک‌سازی دیتاست مقاله با اینجا یکی نیست؛ مقایسه با مقاله فقط تقریبی است.)
+(The paper's split protocol and dataset cleaning are not the same as here; the comparison with the paper is only approximate.)
 
-**تفسیر صادقانه:** این دیتاست ویژگی‌های خود پلتفرم را نمی‌سنجد، اما نشان می‌دهد معماری که روی داده سنتتیک R²≈۰٫۹۷ می‌گیرد، روی داده تجربی واقعی کوچک **از یک خط پایه ساده RandomForest ضعیف‌تر** است. دلایل محتمل (فرضیه، آزموده‌نشده): ۸۸۰ نمونه آموزش برای شبکه گرافی کم است؛ ویژگی‌های global پلتفرم برای شیمی لیپیدهای سنتتیک طراحی شده‌اند و بین این لیپیدهای مشابه تمایز نمی‌دهند؛ نبود اثرانگشت زیرساختاری. بنابراین اعداد دقت سنتتیک بالا را نباید به دقت واقعی تعمیم داد. معیار R2 در `trl.py` به همین دلیل «R² پلتفرم ≥ خط پایه ساده» است و **برقرار نیست**.
+**Honest interpretation:** This dataset does not measure the platform's own properties, but it shows that an architecture achieving R²≈0.97 on synthetic data is **weaker than a simple RandomForest baseline** on small real experimental data. Probable reasons (hypotheses, untested): 880 training samples are too few for a graph network; the platform's global features were designed for the chemistry of synthetic lipids and do not discriminate between these similar lipids; lack of substructure fingerprints. Therefore the high synthetic accuracy numbers should not be generalized to real accuracy. For this reason the R2 criterion in `trl.py` is "platform R² ≥ simple baseline" and it **is not satisfied**.
 
-بازتولید: `python -m ipind2.benchmarking.public` (خروجی: `docs/public_benchmark.json` و ثبت در `benchmarks/history.json`).
+Reproduction: `python -m ipind2.benchmarking.public` (output: `docs/public_benchmark.json` and recorded in `benchmarks/history.json`).
 
-## الزامات بدون اعتبارسنجی کامل
+## Requirements without full validation
 
-- **FR-05 (MD ≥ ۱۰۰ ns، CHARMM36):** موتور MD نصب نبود. تحلیل مسیر (Rg، SASA، S₂، MM-GBSA) با پاسخ تحلیلی تست شده؛ نمونه‌برداری کانفورمری RDKit با `fidelity="conformer_ensemble"` برچسب می‌خورد و `md_complete` را هرگز `True` نمی‌کند. آداپتور OpenMM اجرا نشده است.
-- **FR-12 مقایسه با مقالات:** `published_results.json` باید با ارجاع واقعی پر شود؛ عددی از خودمان نیاورده‌ایم.
+- **FR-05 (MD ≥ 100 ns, CHARMM36):** The MD engine was not installed. Trajectory analysis (Rg, SASA, S₂, MM-GBSA) was tested with an analytical answer; RDKit conformer sampling is labeled `fidelity="conformer_ensemble"` and never sets `md_complete` to `True`. The OpenMM adapter has not been run.
+- **FR-12 comparison with papers:** `published_results.json` must be filled with real citations; we have not supplied any number of our own.
 
-## یافته‌های اعتبارسنجی که کد را تغییر دادند
+## Validation findings that changed the code
 
-| یافته | ریشه | اصلاح |
+| Finding | Root cause | Fix |
 |---|---|---|
-| مولد داده اصلی برای **همه** نمونه‌ها توصیف‌گر تصادفی می‌ساخت (~۱۵۰ SMILES متمایز از ۱۰۰k) | `Descriptors.FractionCsp3` وجود ندارد + `except` فراگیر | بازنویسی؛ تست رگرسیون |
-| `generate_for_gnn` هدف ردیف اول را برای همه گراف‌ها می‌گذاشت | باگ | هدف هر نمونه؛ تست |
-| آمونیوم چهارتایی تقریباً هرگز تولید نمی‌شد | وزن قالب‌ها ∝ اندازه فضا ⇒ یک قالب ≈۹۵٪ لیپیدها | وزن یکنواخت + ۳ قالب کاتیونی |
-| NFR-04 در اولین اندازه‌گیری شکست: فقط ۷۹٬۲۰۰ از ۱۰۰٬۰۰۰ | اشباع قالب‌های کوچک | وزن وفقی؛ تست رگرسیون که با سامپلر قدیم **شکست می‌خورد** (تأییدشده) |
-| بارگذاری مدل ذخیره‌شده خطا می‌داد | `load` امضای زیرکلاس را نادیده می‌گرفت | ساخت از مقداردهی پایه |
-| درخواست هم‌زمان API می‌توانست دسته‌ها را خراب کند | `GraphEncoder` حالت per-call دارد | قفل + تست هم‌زمانی |
-| قیود ناممکن ⇒ `KeyError` | ستون‌های جدول خالی | شمای یکسان |
-| لاگ و شمارنده ورود ناموفق با rollback از بین می‌رفت | خطا داخل تراکنش | commit پیش از پاسخ ۴۰۱ + تست |
+| The main data generator produced random descriptors for **all** samples (~150 distinct SMILES out of 100k) | `Descriptors.FractionCsp3` does not exist + a blanket `except` | Rewritten; regression test |
+| `generate_for_gnn` assigned the first row's target to all graphs | Bug | Per-sample target; test |
+| Quaternary ammonium was almost never generated | Template weight ∝ space size ⇒ one template ≈95% of lipids | Uniform weight + 3 cationic templates |
+| NFR-04 failed on first measurement: only 79,200 of 100,000 | Saturation of small templates | Adaptive weighting; regression test that **fails** with the old sampler (confirmed) |
+| Loading a saved model raised an error | `load` ignored the subclass signature | Construct from base initialization |
+| A concurrent API request could corrupt batches | `GraphEncoder` has per-call state | Lock + concurrency test |
+| Impossible constraints ⇒ `KeyError` | Empty table columns | Uniform schema |
+| Log and failed-login counter were lost on rollback | Error inside the transaction | Commit before the 401 response + test |
 
-## یافته منفی: یادگیری فعال
+## Negative finding: active learning
 
-با shift شدید توزیع (مدل آموزش‌دیده روی لیپید، داده جدید پلیمر، ۳۰ نتیجه): fine-tuning خطای نرمال‌شده اندازه را از ≈۳٫۵ به ≈۰٫۹ می‌رساند. اما **نمونه‌برداری مبتنی بر عدم‌قطعیت از انتخاب تصادفی بهتر نبود** (اندازه: تصادفی ≈۰٫۹، عدم‌قطعیت خالص ≈۱٫۷)؛ نمونه‌های پرت انتخاب می‌شدند. استراتژی `hybrid` (نیمی تصادفی) روی اندازه/بارگذاری ≈ تصادفی و روی زتا بهتر و پایدارتر بود (۱٫۳۴ در برابر ۲٫۲۲، ۳ بذر). پیش‌فرض `hybrid` است؛ برتری عدم‌قطعیت خالص ادعا نمی‌شود.
+Under severe distribution shift (model trained on lipids, new data polymer, 30 results): fine-tuning reduces normalized size error from ≈3.5 to ≈0.9. But **uncertainty-based sampling was not better than random selection** (size: random ≈0.9, pure uncertainty ≈1.7); outliers were selected. The `hybrid` strategy (half random) was ≈ random on size/loading and better and more stable on zeta (1.34 vs. 2.22, 3 seeds). The default is `hybrid`; superiority of pure uncertainty is not claimed.
 
-## نحوه بازتولید
+## How to reproduce
 
 ```bash
-python -m ipind2.training.train --profile release --out models/v1     # ~۳۵ دقیقه روی CPU
+python -m ipind2.training.train --profile release --out models/v1     # ~35 minutes on CPU
 python -m ipind2.training.validate --model-dir models/v1 --out docs/validation_report.json --seed-library
 python -m ipind2.trl --tests-passed yes
-pytest -q                                                              # ۳۲۷ تست
+pytest -q                                                              # 327 tests
 ```
 
-## اعتماد به تست‌ها
+## Trusting the tests
 
-تست‌های امنیتی (قفل حساب، RBAC) و رگرسیون اشباع قالب با **mutation check** سنجیده شدند: با تخریب عمدی منطق، تست‌های مربوط شکست خوردند. (یک تست رگرسیون نخست بدون این بررسی بی‌اثر بود و اصلاح شد.)
+The security tests (account lockout, RBAC) and the template-saturation regression were checked with a **mutation check**: when the logic was deliberately broken, the related tests failed. (One regression test was initially ineffective without this check and was fixed.)

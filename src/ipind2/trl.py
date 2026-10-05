@@ -1,18 +1,18 @@
 """
-ارزیاب شواهدمحور سطح آمادگی فناوری (TRL).
+Evidence-based Technology Readiness Level (TRL) assessor.
 
-TRL ۵ یعنی «اعتبارسنجی مؤلفه‌های یکپارچه در **محیط مرتبط**». برای این محصول، محیط مرتبط یعنی
-داده/آزمایش واقعی، نه فقط داده سنتتیک. این ماژول سطح را **از روی شواهد قابل‌بازرسی**
-محاسبه می‌کند، نه از ادعا:
+TRL 5 means "validation of integrated components in a **relevant environment**". For this product, a relevant environment means
+real data/experiments, not just synthetic data. This module computes the level **from inspectable evidence**,
+not from claims:
 
     python -m ipind2.trl --report docs/validation_report.json --history benchmarks/history.json
 
-* معیارهای خودکار از ``validation_report.json``، تاریخچه بنچمارک و پایگاه داده خوانده می‌شوند؛
-* معیارهایی که با کد قابل‌اثبات نیستند (استقرار در محیط مرتبط) **تأیید دستی امضاشده** می‌خواهند
-  (``docs/trl_attestations.json``: نام، تاریخ، شاهد)؛ بدون آن «برآورده نشده» می‌ماند؛
-* حاصل: بالاترین TRL که **همه** معیارهای آن سطح و سطوح پایین‌تر برقرارند.
+* Automatic criteria are read from ``validation_report.json``, the benchmark history and the database;
+* Criteria not provable by code (deployment in a relevant environment) require a **signed manual attestation**
+  (``docs/trl_attestations.json``: name, date, evidence); without it they stay "not met";
+* Result: the highest TRL for which **all** criteria of that level and lower levels hold.
 
-هیچ معیاری با داده سنتتیک نمی‌تواند معیار «داده واقعی» را برآورده کند (تست‌شده).
+No criterion can be satisfied with synthetic data when it requires "real data" (tested).
 """
 
 import argparse
@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-MIN_REAL_LAB_RESULTS = 10  # حداقل یک دور fine-tuning طبق SRS §4.6
+MIN_REAL_LAB_RESULTS = 10  # at least one fine-tuning round per SRS §4.6
 
 
 @dataclass
@@ -52,8 +52,8 @@ class TRLAssessment:
         return [c for c in self.criteria if c.level <= level and not c.met]
 
     def to_markdown(self) -> str:
-        lines = [f"## TRL محاسبه‌شده از شواهد: **{self.achieved_level}**", "",
-                 "| سطح | معیار | وضعیت | شاهد |", "|---|---|---|---|"]
+        lines = [f"## TRL computed from evidence: **{self.achieved_level}**", "",
+                 "| Level | Criterion | Status | Evidence |", "|---|---|---|---|"]
         for c in sorted(self.criteria, key=lambda c: (c.level, c.id)):
             lines.append(f"| {c.level} | {c.id}: {c.description} | {'✅' if c.met else '❌'} | {c.evidence} |")
         if self.notes:
@@ -78,13 +78,13 @@ def assess(
 ) -> TRLAssessment:
     """
     Args:
-        report_path: خروجی ``ipind2.training.validate``.
-        history_path: تاریخچه بنچمارک (``BenchmarkHistory``).
-        public_benchmark_path: خروجی ``ipind2.benchmarking.public`` (دیتاست عمومی واقعی).
-        attestations_path: تأیید دستی امضاشده معیارهای غیرخودکار.
-        real_lab_results: تعداد نتایج **آزمایشگاهی واقعی** (نه سنتتیک) ثبت‌شده در پایگاه داده.
-        real_lab_improved_holdout: آیا یک دور به‌روزرسانی روی holdout واقعی خطا را کم کرد.
-        test_suite_passed: نتیجه آخرین اجرای pytest (فراخوان گزارش می‌دهد).
+        report_path: output of ``ipind2.training.validate``.
+        history_path: benchmark history (``BenchmarkHistory``).
+        public_benchmark_path: output of ``ipind2.benchmarking.public`` (real public dataset).
+        attestations_path: signed manual attestation of the non-automatic criteria.
+        real_lab_results: number of **real lab results** (not synthetic) recorded in the database.
+        real_lab_improved_holdout: whether one update round reduced the error on a real holdout.
+        test_suite_passed: result of the last pytest run (reported by the caller).
     """
     report = _load(report_path) or {}
     history = _load(history_path) or []
@@ -100,44 +100,44 @@ def assess(
     def add(id_, level, description, kind, met, evidence):
         criteria.append(Criterion(id_, level, description, kind, bool(met), evidence))
 
-    # --- TRL 3/4: اثبات مفهوم و اعتبارسنجی آزمایشگاهی مؤلفه‌ها ------------------
-    add("T1", 4, "مجموعه تست خودکار گذراست", "auto", test_suite_passed is True,
-        {True: "pytest PASS", False: "pytest FAIL", None: "نتیجه ارائه نشده"}[test_suite_passed])
-    add("T2", 4, "دقت مدل روی holdout سنتتیک: NFR-01/02/03 و FR-03", "auto",
+    # --- TRL 3/4: proof of concept and lab validation of components ------------------
+    add("T1", 4, "Automated test suite passes", "auto", test_suite_passed is True,
+        {True: "pytest PASS", False: "pytest FAIL", None: "Result not provided"}[test_suite_passed])
+    add("T2", 4, "Model accuracy on synthetic holdout: NFR-01/02/03 and FR-03", "auto",
         accuracy and all(accuracy.get(k, {}).get("passed") for k in ("NFR-01", "NFR-02", "NFR-03", "FR-03")),
-        "از validation_report.accuracy_holdout" if accuracy else "گزارش اعتبارسنجی موجود نیست")
-    add("T3", 4, "NFR عملکردی (۰۴، ۰۵، ۰۶، ۰۸) اندازه‌گیری و برقرار", "auto",
+        "From validation_report.accuracy_holdout" if accuracy else "Validation report not available")
+    add("T3", 4, "Performance NFRs (04, 05, 06, 08) measured and satisfied", "auto",
         all(nfr(k) for k in ("NFR-04", "NFR-05", "NFR-06", "NFR-08")),
         ", ".join(f"{k}={'✓' if nfr(k) else '✗'}" for k in ("NFR-04", "NFR-05", "NFR-06", "NFR-08")))
 
-    # --- TRL 5: یکپارچگی در محیط مرتبط -----------------------------------------
-    add("R1", 5, "دروازه بنچمارک مرجع منجمد PASS (بدون افت و NFR برقرار)", "auto", gate.get("passed") is True,
-        "benchmark_gate.passed" if gate else "دروازه اجرا نشده")
+    # --- TRL 5: integration in a relevant environment -----------------------------------------
+    add("R1", 5, "Frozen reference benchmark gate PASS (no degradation and NFRs hold)", "auto", gate.get("passed") is True,
+        "benchmark_gate.passed" if gate else "Gate not run")
     pub = _load(public_benchmark_path)
     if pub:
         summary = pub.get("summary", {})
         gnn = summary.get("ipind2-gnn", {}).get("r2_mean")
         forest = summary.get("random-forest (Morgan)", {}).get("r2_mean")
         ok = gnn is not None and forest is not None and gnn >= forest
-        evidence = (f"{pub.get('dataset')}: R² پلتفرم {gnn:.3f} در برابر خط پایه RandomForest+Morgan {forest:.3f}"
-                    if gnn is not None and forest is not None else "گزارش ناقص")
+        evidence = (f"{pub.get('dataset')}: platform R² {gnn:.3f} vs. RandomForest+Morgan baseline {forest:.3f}"
+                    if gnn is not None and forest is not None else "Incomplete report")
     else:
-        ok, evidence = False, "گزارش بنچمارک عمومی (public_benchmark.json) موجود نیست"
-    add("R2", 5, "روی دیتاست عمومی واقعی، R² پلتفرم ≥ خط پایه ساده (RandomForest+Morgan)", "auto", ok, evidence)
+        ok, evidence = False, "Public benchmark report (public_benchmark.json) not available"
+    add("R2", 5, "On a real public dataset, platform R² ≥ simple baseline (RandomForest+Morgan)", "auto", ok, evidence)
     md_real = bool(report.get("md_real_validation", {}).get("complete"))
-    add("R3", 5, "اعتبارسنجی MD واقعی (≥۱۰۰ ns، موتور MD) برای کاندیداها", "auto", md_real,
-        "md_real_validation.complete" if md_real else "فقط نمونه‌برداری کانفورمری؛ موتور MD اجرا نشده")
-    add("R4", 5, f"حلقه آزمایشگاهی: ≥{MIN_REAL_LAB_RESULTS} نتیجه واقعی و بهبود روی holdout واقعی", "auto",
+    add("R3", 5, "Real MD validation (≥100 ns, MD engine) for candidates", "auto", md_real,
+        "md_real_validation.complete" if md_real else "Only conformer sampling; MD engine not run")
+    add("R4", 5, f"Lab loop: ≥{MIN_REAL_LAB_RESULTS} real results and improvement on a real holdout", "auto",
         real_lab_results >= MIN_REAL_LAB_RESULTS and real_lab_improved_holdout,
-        f"{real_lab_results} نتیجه واقعی؛ بهبود holdout={'بله' if real_lab_improved_holdout else 'خیر/سنجیده نشده'}")
+        f"{real_lab_results} real results; holdout improvement={'yes' if real_lab_improved_holdout else 'no/not measured'}")
     deploy = attest.get("staging_deployment", {})
-    add("R5", 5, "استقرار در محیط مرتبط (staging: PostgreSQL+TLS1.3+Redis) با تأیید امضاشده", "attestation",
+    add("R5", 5, "Deployment in a relevant environment (staging: PostgreSQL+TLS1.3+Redis) with signed attestation", "attestation",
         bool(deploy.get("signed_by") and deploy.get("date") and deploy.get("evidence")),
-        f"امضا: {deploy.get('signed_by')} ({deploy.get('date')})" if deploy else "تأیید دستی موجود نیست")
+        f"Signed by: {deploy.get('signed_by')} ({deploy.get('date')})" if deploy else "No manual attestation available")
     sec = attest.get("security_review", {})
-    add("R6", 5, "بازبینی امنیتی مستقل (SEC-01..06) با تأیید امضاشده", "attestation",
+    add("R6", 5, "Independent security review (SEC-01..06) with signed attestation", "attestation",
         bool(sec.get("signed_by") and sec.get("date") and sec.get("evidence")),
-        f"امضا: {sec.get('signed_by')} ({sec.get('date')})" if sec else "تأیید دستی موجود نیست")
+        f"Signed by: {sec.get('signed_by')} ({sec.get('date')})" if sec else "No manual attestation available")
 
     achieved = 3
     for level in (4, 5):
@@ -149,9 +149,9 @@ def assess(
     notes = []
     if achieved < 5:
         missing = ", ".join(c.id for c in criteria if c.level == 5 and not c.met)
-        notes.append(f"برای TRL ۵ معیارهای برآورده‌نشده: {missing}")
+        notes.append(f"Unmet criteria for TRL 5: {missing}")
     if not md_real:
-        notes.append("بدون MD واقعی، FR-05 (≥۱۰۰ ns) تأیید نشده؛ نمونه‌برداری کانفورمری جایگزین آن نیست.")
+        notes.append("Without real MD, FR-05 (≥100 ns) is not confirmed; conformer sampling is not a substitute for it.")
     return TRLAssessment(criteria, achieved, notes)
 
 

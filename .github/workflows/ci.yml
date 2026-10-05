@@ -11,8 +11,8 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: pytest -q --cov=ipind2 --cov-report=term-missing:skip-covered
   model-gate:
-    # دروازه انتشار مدل (FR-12): آموزش smoke برای سالم‌بودن خط لوله؛ برای انتشار واقعی از
-    # پروفایل standard/full روی runner دارای منابع کافی استفاده کنید.
+    # Model release gate (FR-12): smoke training to verify the pipeline is healthy; for a real release use the
+    # standard/full profile on a runner with sufficient resources.
     needs: test
     runs-on: ubuntu-22.04
     steps:

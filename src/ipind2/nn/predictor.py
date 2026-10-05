@@ -1,9 +1,9 @@
 """
-پیش‌بین چندوظیفه‌ای مبتنی بر ensemble — پایه مشترک واحدهای ۲ و ۳.
+Ensemble-based multi-task predictor — the shared base of Units 2 and 3.
 
-هر عضو ensemble با بذر متفاوت آموزش می‌بیند؛ واریانس پیش‌بینی بین اعضا همان «معیار
-عدم‌قطعیت» FR-06 است و به‌طور مستقیم به ``ipind2.interpretability.confidence`` و
-نمونه‌برداری یادگیری فعال (Query-by-Committee) خورانده می‌شود.
+Each ensemble member is trained with a different seed; the prediction variance between members is the FR-06 "uncertainty
+measure" and is fed directly to ``ipind2.interpretability.confidence`` and
+active learning sampling (Query-by-Committee).
 
 See docs/SRS.md §4.2, §4.3, §4.6, §4.7.
 """
@@ -29,7 +29,7 @@ from .training import TargetScaler, TrainingHistory, train_regressor
 
 
 class GraphEncoder:
-    """گراف + بردار ویژگی global هر مولکول را یک‌بار می‌سازد و دسته‌ها را برمی‌گرداند."""
+    """Builds the graph + global feature vector of each molecule once and returns batches."""
 
     def __init__(self, max_atoms: int = 96):
         self.max_atoms = max_atoms
@@ -44,7 +44,7 @@ class GraphEncoder:
         self.global_std = np.where(std < 1e-6, 1.0, std).astype(np.float32)
 
     def prepare(self, smiles_list: Sequence[str]) -> List[int]:
-        """آماده‌سازی ورودی‌ها؛ اندیس نمونه‌های معتبر را برمی‌گرداند."""
+        """Prepare inputs; returns the indices of valid samples."""
         graphs, rows, kept = [], [], []
         for i, smiles in enumerate(smiles_list):
             graph = smiles_to_graph(smiles, self.max_atoms)
@@ -88,14 +88,14 @@ class GraphEncoder:
 
 class EnsemblePropertyPredictor:
     """
-    ensemble از مدل‌های گرافی برای پیش‌بینی چندوظیفه‌ای.
+    Ensemble of graph models for multi-task prediction.
 
     Args:
-        target_names: نام اهداف (ستون‌های خروجی).
-        architecture: برچسب معماری ثبت‌شده در ``MODEL_FACTORIES``؛ factory با امضای
-            ``(n_tasks, **model_kwargs) -> nn.Module`` که forward آن
-            ``(nodes, adjacency, mask, globals) -> (B, n_tasks)`` است.
-        n_ensemble: تعداد اعضا (≥۲ برای تخمین عدم‌قطعیت).
+        target_names: names of the targets (output columns).
+        architecture: architecture label registered in ``MODEL_FACTORIES``; a factory with signature
+            ``(n_tasks, **model_kwargs) -> nn.Module`` whose forward is
+            ``(nodes, adjacency, mask, globals) -> (B, n_tasks)``.
+        n_ensemble: number of members (≥2 for uncertainty estimation).
     """
 
     MODEL_FACTORIES: Dict[str, Callable[..., nn.Module]] = {}
@@ -109,9 +109,9 @@ class EnsemblePropertyPredictor:
         max_atoms: int = 96,
     ):
         if architecture not in self.MODEL_FACTORIES:
-            raise ValueError(f"معماری ناشناخته: {architecture!r}")
+            raise ValueError(f"Unknown architecture: {architecture!r}")
         if n_ensemble < 1:
-            raise ValueError("n_ensemble باید حداقل ۱ باشد")
+            raise ValueError("n_ensemble must be at least 1")
         self.target_names = list(target_names)
         self.architecture = architecture
         self.n_ensemble = n_ensemble
@@ -120,12 +120,12 @@ class EnsemblePropertyPredictor:
         self.scaler = TargetScaler()
         self.models: List[nn.Module] = []
         self.histories: List[TrainingHistory] = []
-        # GraphEncoder حالت per-call دارد (prepare/batch)؛ برای درخواست‌های هم‌زمان API
-        # (چند thread) عملیات پیش‌بینی/آموزش سریالی می‌شوند.
+        # GraphEncoder has per-call state (prepare/batch); for concurrent API requests
+        # (several threads) prediction/training operations are serialized.
         self._lock = threading.RLock()
 
     def __getstate__(self):
-        # قفل threading قابل pickle/deepcopy نیست؛ هنگام بازیابی دوباره ساخته می‌شود
+        # A threading lock cannot be pickled/deepcopied; it is rebuilt on restore
         state = self.__dict__.copy()
         state.pop("_lock", None)
         return state
@@ -152,18 +152,18 @@ class EnsemblePropertyPredictor:
         seed: int = 0,
         verbose: bool = False,
     ) -> "EnsemblePropertyPredictor":
-        """آموزش ensemble. ``targets`` به شکل (n, n_tasks)."""
+        """Train the ensemble. ``targets`` has shape (n, n_tasks)."""
         targets = np.asarray(targets, dtype=np.float32)
         if targets.ndim == 1:
             targets = targets[:, None]
         if targets.shape[1] != len(self.target_names):
-            raise ValueError("تعداد ستون‌های targets با target_names نمی‌خواند")
+            raise ValueError("The number of targets columns does not match target_names")
         if len(smiles) != len(targets):
-            raise ValueError("طول smiles و targets برابر نیست")
+            raise ValueError("The lengths of smiles and targets are not equal")
 
         kept = self.encoder.prepare(smiles)
         if len(kept) < 10:
-            raise ValueError("تعداد SMILES معتبر برای آموزش کافی نیست (حداقل ۱۰)")
+            raise ValueError("Not enough valid SMILES for training (at least 10)")
         targets = targets[kept]
         self.encoder.fit_globals(self.encoder.globals)
         self.scaler = TargetScaler.fit(targets)
@@ -200,19 +200,19 @@ class EnsemblePropertyPredictor:
         seed: int = 0,
     ) -> None:
         """
-        Fine-tuning با Early Stopping روی داده جدید آزمایشگاهی (FR-06).
+        Fine-tuning with Early Stopping on new lab data (FR-06).
 
-        مقیاس‌گر اهداف و نرمال‌سازی global ثابت می‌ماند تا وزن‌های قبلی معتبر بمانند.
+        The target scaler and global normalization stay fixed so previous weights remain valid.
         """
         if not self.models:
-            raise RuntimeError("ابتدا fit() را فراخوانی کنید")
+            raise RuntimeError("Call fit() first")
         targets = np.asarray(targets, dtype=np.float32)
         if targets.ndim == 1:
             targets = targets[:, None]
         kept = self.encoder.prepare(smiles)
         if len(kept) < 4:
-            raise ValueError("برای fine-tuning حداقل ۴ نمونه معتبر لازم است")
-        # اهداف جزئی (NaN) مجازند؛ ماسک loss آن‌ها را نادیده می‌گیرد
+            raise ValueError("At least 4 valid samples are required for fine-tuning")
+        # Partial targets (NaN) are allowed; the loss mask ignores them
         scaled = torch.from_numpy(self.scaler.transform(targets[kept]).astype(np.float32))
         for member, model in enumerate(self.models):
             train_regressor(
@@ -232,7 +232,7 @@ class EnsemblePropertyPredictor:
     # ------------------------------------------------------------------
     def _member_predictions_unlocked(self, smiles: Sequence[str]) -> Tuple[np.ndarray, List[int]]:
         if not self.models:
-            raise RuntimeError("مدل آموزش ندیده؛ ابتدا fit() یا load() را فراخوانی کنید")
+            raise RuntimeError("Model is not trained; call fit() or load() first")
         kept = self.encoder.prepare(smiles)
         if not kept:
             return np.zeros((len(self.models), 0, len(self.target_names)), dtype=np.float32), []
@@ -266,7 +266,7 @@ class EnsemblePropertyPredictor:
     def predict_with_uncertainty(
         self, smiles: Sequence[str]
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[int]]:
-        """میانگین و انحراف‌معیار ensemble؛ همچنین اندیس نمونه‌های معتبر ورودی."""
+        """Ensemble mean and standard deviation; also the indices of the valid input samples."""
         members, kept = self._member_predictions(smiles)
         mean = members.mean(axis=0)
         std = members.std(axis=0, ddof=1) if len(self.models) > 1 else np.zeros_like(mean)
@@ -277,17 +277,17 @@ class EnsemblePropertyPredictor:
         )
 
     def predict(self, smiles: Sequence[str]) -> pd.DataFrame:
-        """میانگین ensemble (ردیف‌های SMILES نامعتبر حذف می‌شوند؛ index = اندیس ورودی)."""
+        """Ensemble mean (invalid SMILES rows are dropped; index = input index)."""
         return self.predict_with_uncertainty(smiles)[0]
 
     def member_predictions(self, smiles: Sequence[str]) -> Tuple[np.ndarray, List[int]]:
-        """پیش‌بینی خام هر عضو به شکل (n_members, n, n_tasks) برای Query-by-Committee."""
+        """Raw prediction of each member with shape (n_members, n, n_tasks) for Query-by-Committee."""
         return self._member_predictions(smiles)
 
     def _atom_attention_unlocked(self, smiles: str) -> Optional[np.ndarray]:
-        """وزن attention هر اتم (میانگین اعضا) — خروجی تفسیرپذیری FR-09."""
+        """Attention weight of each atom (member mean) — the FR-09 interpretability output."""
         if not self.models:
-            raise RuntimeError("مدل آموزش ندیده")
+            raise RuntimeError("Model is not trained")
         kept = self.encoder.prepare([smiles])
         if not kept:
             return None
@@ -301,7 +301,7 @@ class EnsemblePropertyPredictor:
 
     # ------------------------------------------------------------------
     def evaluate(self, smiles: Sequence[str], targets: np.ndarray) -> pd.DataFrame:
-        """RMSE و R² هر هدف روی داده ارزیابی (مبنای NFR-01..NFR-03)."""
+        """RMSE and R² of each target on evaluation data (basis of NFR-01..NFR-03)."""
         from ..benchmarking.metrics import r_squared, rmse
 
         targets = np.asarray(targets, dtype=np.float32)
@@ -337,8 +337,8 @@ class EnsemblePropertyPredictor:
     def load(cls, directory: str) -> "EnsemblePropertyPredictor":
         path = Path(directory)
         meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
-        # زیرکلاس‌ها (PhysicochemicalPredictor/BiologicalPredictor) امضای __init__ متفاوتی
-        # دارند؛ برای بازیابی همیشه از مقداردهی اولیه پایه استفاده می‌کنیم.
+        # Subclasses (PhysicochemicalPredictor/BiologicalPredictor) have a different __init__
+        # signature; for restoring we always use the base initialization.
         predictor = object.__new__(cls)
         EnsemblePropertyPredictor.__init__(
             predictor,

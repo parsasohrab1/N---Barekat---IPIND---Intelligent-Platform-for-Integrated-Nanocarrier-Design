@@ -1,4 +1,4 @@
-"""تست‌های لایه داده (FR-08)، FAIR/MIRIBEL (FR-13)، کش، دروازه بنچمارک (FR-12) و خط لوله."""
+"""Tests of the data layer (FR-08), FAIR/MIRIBEL (FR-13), cache, benchmark gate (FR-12) and pipeline."""
 
 import json
 import threading
@@ -47,7 +47,7 @@ class TestDatabase:
         with session_scope(factory) as s:
             repo = MoleculeRepository(s)
             first = repo.add_molecule("OCC", "lipid")
-            again = repo.add_molecule("C(O)C", "lipid")  # همان مولکول، نوشتار دیگر
+            again = repo.add_molecule("C(O)C", "lipid")  # the same molecule, a different notation
             assert first.id == again.id and repo.count() == 1
             assert first.molecular_weight == pytest.approx(46.07, abs=0.05) and first.inchikey
 
@@ -64,7 +64,7 @@ class TestDatabase:
             repo.store_predictions(mid, {"phys_size_nm": 98.0}, {"bio_cytotoxicity_ic50_ug_ml": 41.0}, 0.9, "v1", "HEK293")
             added = repo.add_experimental_results(pd.DataFrame([
                 {"molecule_id": mid, "experimental_size_nm": 101.0, "experimental_date": "2026-05-01", "lab_technician": "A"},
-                {"molecule_id": 424242, "experimental_size_nm": 1.0},  # ناموجود ⇒ رد
+                {"molecule_id": 424242, "experimental_size_nm": 1.0},  # nonexistent ⇒ rejected
             ]))
             assert added == 1
             pending = repo.unconsumed_results()
@@ -102,14 +102,14 @@ class TestDatabase:
             assert JobRepository(s).get("j1").status == "queued" and JobRepository(s).get("nope") is None
 
     def test_schema_sql_and_orm_agree_on_core_columns(self):
-        """sql/schema.sql (مرجع PostgreSQL) و ORM نباید از هم دور شوند."""
+        """sql/schema.sql (the PostgreSQL reference) and the ORM must not drift apart."""
         import re
         from pathlib import Path
 
         ddl = (Path(__file__).parent.parent / "sql" / "schema.sql").read_text(encoding="utf-8")
         for table in ("molecules", "physicochemical_properties", "biological_properties", "experimental_results"):
             match = re.search(rf"CREATE TABLE {table} \((.*?)\n\);", ddl, re.S)
-            assert match, f"{table} در schema.sql نیست"
+            assert match, f"{table} is not in schema.sql"
             sql_columns = {line.split()[0] for line in match.group(1).splitlines() if line.strip() and not line.strip().startswith("--")}
             from ipind2.database import Base
 
@@ -200,7 +200,7 @@ class TestCache:
         cache.set("a", 1)
         cache.set("b", 2)
         cache.get("a")
-        cache.set("c", 3)  # b قدیمی‌ترین استفاده‌نشده است
+        cache.set("c", 3)  # b is the least recently used
         assert cache.get("b") is None and cache.get("a") == 1 and cache.get("c") == 3
         cache.delete("a")
         assert cache.get("a") is None
@@ -241,7 +241,7 @@ class TestReleaseBenchmark:
         assert len(history.load()) == 14
 
         same = benchmark_release(smoke_bundle, history, reference, record=False)
-        assert all(not r.regressed for r in same.regressions)  # همان مدل ⇒ بدون افت
+        assert all(not r.regressed for r in same.regressions)  # the same model ⇒ no degradation
 
         import copy
 
@@ -263,7 +263,7 @@ class TestReleaseBenchmark:
         history = BenchmarkHistory(str(tmp_path / "h.json"))
         benchmark_release(smoke_bundle, history, frozen_reference_dataset(60))
         other = benchmark_release(smoke_bundle, history, frozen_reference_dataset(60, seed=3), record=False)
-        assert all("اجرای قبلی" in r.message for r in other.regressions)
+        assert all("No previous run" in r.message for r in other.regressions)
 
     def test_published_results_require_citation(self, tmp_path):
         good = tmp_path / "p.json"

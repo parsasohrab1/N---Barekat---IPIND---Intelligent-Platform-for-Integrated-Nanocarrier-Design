@@ -11,7 +11,7 @@ COPY sql ./sql
 RUN pip install --no-deps .
 USER ipind
 
-# راز‌ها (IPIND_JWT_SECRET، IPIND_ENCRYPTION_KEY) هرگز در image نیستند؛ هنگام اجرا تزریق می‌شوند.
+# Secrets (IPIND_JWT_SECRET, IPIND_ENCRYPTION_KEY) are never in the image; they are injected at runtime.
 ENV IPIND_MODEL_DIR=/models IPIND_DATABASE_URL=sqlite:////data/ipind2.db
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"

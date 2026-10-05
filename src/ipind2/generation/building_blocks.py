@@ -1,14 +1,14 @@
 """
-کتابخانه بلوک‌های سازنده و قالب‌های ساختاری نانوحامل (ورودی واحد ۱، FR-01).
+Library of building blocks and structural templates for nanocarriers (input of Unit 1, FR-01).
 
-رویکرد: ساختارها به‌صورت «قالب + بلوک» ساخته می‌شوند، نه با تولید کاراکتر‌به‌کاراکتر
-SMILES. دلیل: FR-01 نرخ اعتبار > ۹۵٪ می‌خواهد؛ قالب‌های اینجا طوری نوشته شده‌اند که
-هر ترکیب مجاز بلوک‌ها، SMILES نحویاً و شیمیاً معتبر بدهد (در ``tests/test_generation.py``
-نرخ اعتبار هر سه کلاس اسکلت سنجیده می‌شود). مدل مولد (CVAE) روی *انتخاب* بلوک‌ها و
-فضای توصیف‌گر کار می‌کند، نه روی نحو SMILES.
+Approach: structures are built as "template + blocks", not by character-by-character generation of
+SMILES. Reason: FR-01 requires a validity rate > 95%; the templates here are written so that
+every allowed combination of blocks gives a syntactically and chemically valid SMILES (in ``tests/test_generation.py``
+the validity rate of all three scaffold classes is measured). The generative model (CVAE) works on the *selection* of blocks and the
+descriptor space, not on SMILES syntax.
 
-ترکیب بلوک‌ها با الحاق رشته‌ای انجام می‌شود؛ هر بلوک میانی طوری نوشته شده که اتم آخرش
-ظرفیت پیوند با بلوک بعدی را داشته باشد.
+Blocks are combined by string concatenation; each intermediate block is written so that its last atom
+has the bonding valence for the next block.
 
 See docs/SRS.md §4.1 (FR-01).
 """
@@ -21,81 +21,81 @@ SCAFFOLD_TYPES: Tuple[str, ...] = ("lipid", "polymer", "metal")
 
 def _alkyl_tails() -> List[str]:
     """
-    دم‌های آبگریز: اشباع، غیراشباع، شاخه‌دار، هیدروکسیله و زیست‌تخریب‌پذیر (استردار).
+    Hydrophobic tails: saturated, unsaturated, branched, hydroxylated and biodegradable (ester).
 
-    تنوع طول/اشباع زنجیره مهم‌ترین اهرم تنظیم اندازه و pKa در لیپیدهای یونیزه‌شونده است،
-    بنابراین دامنه آن (۶ تا ۲۴ کربن) پوشش داده می‌شود.
+    Chain length/saturation diversity is the most important lever for tuning size and pKa in ionizable lipids,
+    so its range (6 to 24 carbons) is covered.
     """
     tails: List[str] = []
     for n in range(6, 25):
-        tails.append("C" * n)  # اشباع
+        tails.append("C" * n)  # saturated
     for n in range(12, 25, 2):
         for position in (n // 3, n // 2):
-            tails.append("C" * position + "C=C" + "C" * (n - position - 2))  # غیراشباع
+            tails.append("C" * position + "C=C" + "C" * (n - position - 2))  # unsaturated
     for n in range(9, 22, 3):
-        tails.append("C" * (n - 3) + "C(C)C")  # شاخه‌دار انتهایی
+        tails.append("C" * (n - 3) + "C(C)C")  # terminal branched
     for n in range(10, 22, 3):
-        tails.append("C" * (n // 2) + "C(O)" + "C" * (n - n // 2 - 1))  # هیدروکسیله
+        tails.append("C" * (n // 2) + "C(O)" + "C" * (n - n // 2 - 1))  # hydroxylated
     for n in range(10, 22, 3):
-        tails.append("C" * (n // 2) + "C(=O)O" + "C" * (n - n // 2 - 1))  # استر زیست‌تخریب‌پذیر
+        tails.append("C" * (n // 2) + "C(=O)O" + "C" * (n - n // 2 - 1))  # biodegradable ester
     return tails
 
 
 TAILS: Tuple[str, ...] = tuple(_alkyl_tails())
 
-# لینکرهای قابل‌زیست‌تخریب/پایدار بین دم و سر قطبی
+# Biodegradable/stable linkers between the tail and the polar head
 LINKERS: Tuple[str, ...] = (
-    "C(=O)O",      # استر
-    "OC(=O)",      # استر معکوس
-    "C(=O)N",      # آمید
-    "NC(=O)",      # آمید معکوس
-    "OC(=O)N",     # کاربامات
-    "SSC",         # دی‌سولفید (پاسخ‌دهنده به ردوکس)
-    "O",           # اتر
-    "N",           # آمین ثانویه
-    "S",           # تیواتر
-    "OCCO",        # اتیلن‌گلیکول کوتاه
-    "CC(O)C",      # پروپانول‌دیول
-    "C(=O)OCC",    # استر + اسپیسر
+    "C(=O)O",      # ester
+    "OC(=O)",      # reverse ester
+    "C(=O)N",      # amide
+    "NC(=O)",      # reverse amide
+    "OC(=O)N",     # carbamate
+    "SSC",         # disulfide (redox-responsive)
+    "O",           # ether
+    "N",           # secondary amine
+    "S",           # thioether
+    "OCCO",        # short ethylene glycol
+    "CC(O)C",      # propanediol
+    "C(=O)OCC",    # ester + spacer
 )
 
-# سرهای قطبی/یونیزه‌شونده (انتهایی)
+# Polar/ionizable heads (terminal)
 POLAR_HEADS: Tuple[str, ...] = (
-    "[N+](C)(C)C",                   # آمونیوم چهارتایی (کاتیونی دائم)
-    "N(C)C",                         # آمین نوع سوم (یونیزه‌شونده)
+    "[N+](C)(C)C",                   # quaternary ammonium (permanently cationic)
+    "N(C)C",                         # tertiary amine (ionizable)
     "N(CC)CC",
-    "NCCN(C)C",                      # پلی‌آمین
-    "N",                             # آمین اولیه
-    "O",                             # هیدروکسیل
+    "NCCN(C)C",                      # polyamine
+    "N",                             # primary amine
+    "O",                             # hydroxyl
     "OCCO",
-    "OCCOCCOCCO",                    # PEG کوتاه
-    "C(=O)O",                        # کربوکسیل (آنیونی)
-    "C(N)=O",                        # آمید اولیه
-    "N1CCOCC1",                      # مورفولین
-    "N1CCCC1",                       # پیرولیدین
-    "N1CCN(C)CC1",                   # پیپرازین
-    "c1ccncc1",                      # پیریدین
-    "OS(=O)(=O)O",                   # سولفات
-    "OP(=O)(O)O",                    # فسفات
+    "OCCOCCOCCO",                    # short PEG
+    "C(=O)O",                        # carboxyl (anionic)
+    "C(N)=O",                        # primary amide
+    "N1CCOCC1",                      # morpholine
+    "N1CCCC1",                       # pyrrolidine
+    "N1CCN(C)CC1",                   # piperazine
+    "c1ccncc1",                      # pyridine
+    "OS(=O)(=O)O",                   # sulfate
+    "OP(=O)(O)O",                    # phosphate
 )
 
-# سرهای گلیسرولی/فسفولیپیدی (برای قالب دو-دمی)
+# Glycerol/phospholipid heads (for the two-tail template)
 GLYCEROL_HEADS: Tuple[str, ...] = (
-    "COP(=O)(O)OCC[N+](C)(C)C",      # فسفوکولین
-    "COP(=O)(O)OCCN",                # فسفواتانول‌آمین
-    "COP(=O)(O)OCC(N)C(=O)O",        # فسفوسرین
-    "COP(=O)(O)OCCOCCOCCO",          # PEG-فسفات
-    "CO",                            # دی‌آسیل‌گلیسرول
-    "COC(=O)CCC(=O)O",               # سوکسینیل
-    "COP(=O)(O)OCC(O)CO",            # فسفوگلیسرول
-    "COP(=O)(O)O",                   # فسفاتیدیک‌اسید
-    "COCC(O)CO",                     # گلیسریل‌اتر
-    "COC(=O)N",                      # کاربامات
-    "COS(=O)(=O)O",                  # سولفات
-    "COCCN(C)C",                     # آمینواتیل‌اتر
+    "COP(=O)(O)OCC[N+](C)(C)C",      # phosphocholine
+    "COP(=O)(O)OCCN",                # phosphoethanolamine
+    "COP(=O)(O)OCC(N)C(=O)O",        # phosphoserine
+    "COP(=O)(O)OCCOCCOCCO",          # PEG-phosphate
+    "CO",                            # diacylglycerol
+    "COC(=O)CCC(=O)O",               # succinyl
+    "COP(=O)(O)OCC(O)CO",            # phosphoglycerol
+    "COP(=O)(O)O",                   # phosphatidic acid
+    "COCC(O)CO",                     # glyceryl ether
+    "COC(=O)N",                      # carbamate
+    "COS(=O)(=O)O",                  # sulfate
+    "COCCN(C)C",                     # aminoethyl ether
 )
 
-# کلاهک انتهایی برای قالب دی‌آلکیل‌آمین
+# End cap for the dialkylamine template
 AMINE_CAPS: Tuple[str, ...] = (
     "C",
     "CCO",
@@ -111,7 +111,7 @@ AMINE_CAPS: Tuple[str, ...] = (
     "CC(O)C(O)CO",
 )
 
-# واحدهای تکرارشونده پلیمری (هر واحد خودبسنده و قابل‌تکرار است)
+# Polymer repeat units (each unit is self-contained and repeatable)
 POLYMER_REPEAT_UNITS: Dict[str, str] = {
     "PLA": "OC(C)C(=O)",
     "PGA": "OCC(=O)",
@@ -126,7 +126,7 @@ POLYMER_REPEAT_UNITS: Dict[str, str] = {
 POLYMER_INITIATORS: Tuple[str, ...] = ("CC", "CCCC", "CO", "OCC", "NCC", "c1ccccc1C")
 POLYMER_TERMINATORS: Tuple[str, ...] = ("O", "OC", "N", "OCCO", "C(=O)O", "OCCOCCOCCO")
 
-# لنگرهای سطحی نانوذرات فلزی/معدنی (انتهایی)
+# Surface anchors of metal/inorganic nanoparticles (terminal)
 METAL_ANCHORS: Dict[str, str] = {
     "Au": "S[Au]",
     "Au_dithiol": "SC(S)[Au]",
@@ -142,13 +142,13 @@ METAL_ANCHORS: Dict[str, str] = {
 @dataclass(frozen=True)
 class StructureTemplate:
     """
-    یک قالب ساختاری: الگوی رشته‌ای با جایگاه‌های نام‌دار و دامنه مجاز هر جایگاه.
+    A structural template: a string pattern with named slots and the allowed range of each slot.
 
     Attributes:
-        name: شناسه قالب (در خروجی به‌عنوان ``template`` گزارش می‌شود).
+        name: template identifier (reported as ``template`` in the output).
         scaffold_type: 'lipid' | 'polymer' | 'metal'.
-        pattern: الگو با جایگاه‌های ``{slot}``.
-        slots: نام جایگاه -> فهرست مقادیر مجاز.
+        pattern: pattern with ``{slot}`` placeholders.
+        slots: slot name -> list of allowed values.
     """
 
     name: str
@@ -317,27 +317,27 @@ TEMPLATES: Tuple[StructureTemplate, ...] = (
 
 
 def templates_for(scaffold_type: str = None) -> List[StructureTemplate]:
-    """قالب‌های یک کلاس اسکلت (یا همه قالب‌ها اگر ``None``)."""
+    """Templates of one scaffold class (or all templates if ``None``)."""
     if scaffold_type is None:
         return list(TEMPLATES)
     if scaffold_type not in SCAFFOLD_TYPES:
         raise ValueError(
-            f"scaffold_type نامعتبر: {scaffold_type!r} (مجاز: {', '.join(SCAFFOLD_TYPES)})"
+            f"Invalid scaffold_type: {scaffold_type!r} (allowed: {', '.join(SCAFFOLD_TYPES)})"
         )
     return [t for t in TEMPLATES if t.scaffold_type == scaffold_type]
 
 
 def theoretical_library_size(scaffold_type: str = None) -> int:
     """
-    اندازه نظری فضای ساختاری قابل‌دسترس (حد بالای کتابخانه مجازی).
+    Theoretical size of the reachable structural space (upper bound of the virtual library).
 
-    مبنای ادعای NFR-08/FR-01 درباره مقیاس کتابخانه: فضای قابل‌شمارش قالب‌ها.
+    Basis of the NFR-08/FR-01 claim about library scale: the enumerable space of templates.
     """
     return sum(t.combination_count() for t in templates_for(scaffold_type))
 
 
 def all_building_blocks() -> Dict[str, Sequence[str]]:
-    """همه بلوک‌های سازنده، برای مستندسازی و گزارش پوشش شیمیایی."""
+    """All building blocks, for documentation and chemical coverage reporting."""
     return {
         "tails": TAILS,
         "linkers": LINKERS,

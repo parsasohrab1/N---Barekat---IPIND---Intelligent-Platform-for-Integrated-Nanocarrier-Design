@@ -1,4 +1,4 @@
-"""تست‌های واحد ۴: ابزارهای پارتو و Pareto-Guided RL (FR-04، NFR-06)."""
+"""Unit 4 tests: Pareto tools and Pareto-Guided RL (FR-04, NFR-06)."""
 
 import numpy as np
 import pandas as pd
@@ -26,7 +26,7 @@ class TestParetoTools:
     def test_dominates_semantics(self):
         assert dominates(np.array([2, 2]), np.array([1, 1]))
         assert dominates(np.array([2, 1]), np.array([1, 1]))
-        assert not dominates(np.array([1, 1]), np.array([1, 1]))  # برابر ⇒ غلبه ندارد
+        assert not dominates(np.array([1, 1]), np.array([1, 1]))  # equal ⇒ no dominance
         assert not dominates(np.array([2, 0]), np.array([0, 2]))
 
     def test_known_fronts(self):
@@ -102,13 +102,13 @@ class TestConstraints:
     def test_from_nlp_parameters(self):
         from ipind2.nlp_interface import parse_query
 
-        constraints = Constraints.from_target_parameters(parse_query("لیپیدی اندازه بین ۸۰ تا ۱۲۰ نانومتر"))
+        constraints = Constraints.from_target_parameters(parse_query("lipid size between 80 to 120 nm"))
         assert constraints.size_range_nm == (80.0, 120.0)
 
 
 class TestParetoGuidedRL:
     def test_beats_random_search_at_equal_budget(self):
-        """ادعای اصلی FR-04: هدایت سیاست، جبهه بهتری از نمونه‌گیری تصادفی با همان بودجه می‌دهد."""
+        """Main FR-04 claim: policy guidance gives a better front than random sampling with the same budget."""
         reference = np.zeros(len(OBJECTIVE_NAMES))
         wins = 0
         for seed in (0, 1):
@@ -139,7 +139,7 @@ class TestParetoGuidedRL:
         assert len(optimizer.select_diverse(10)) <= 10
 
     def test_convergence_criterion_triggers_early_stop(self):
-        """معیار SRS: تغییر هایپرحجم <۱٪ در پنجره ⇒ توقف پیش از سقف تکرار."""
+        """SRS criterion: hypervolume change <1% in the window ⇒ stop before the iteration cap."""
         optimizer = ParetoGuidedRL(oracle_objective, scaffold_type="metal", batch_size=16, seed=5)
         result = optimizer.optimize(iterations=400, patience_window=15, tolerance=0.05, min_iterations=16)
         assert result.converged and result.iterations < 400
@@ -149,7 +149,7 @@ class TestParetoGuidedRL:
     def test_hypervolume_history_nondecreasing(self):
         optimizer = ParetoGuidedRL(oracle_objective, scaffold_type="lipid", batch_size=16, seed=6)
         history = optimizer.optimize(iterations=15).hypervolume_history
-        # آرشیو فقط رشد می‌کند و HV با بذر ثابت تخمین می‌شود؛ افت جزئی نمونه‌برداری مجاز است
+        # The archive only grows and HV is estimated with a fixed seed; a small drop from sampling is allowed
         assert all(b >= a * 0.97 for a, b in zip(history, history[1:]))
 
     def test_reproducible_with_seed(self):

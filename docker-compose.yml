@@ -1,12 +1,12 @@
-# استقرار مرجع: API پشت nginx با TLS 1.3 + PostgreSQL + Redis.
-# راز‌ها را در فایل .env (خارج از git) بگذارید؛ نمونه کلیدها در docs/OPERATIONS.md.
+# Reference deployment: API behind nginx with TLS 1.3 + PostgreSQL + Redis.
+# Put secrets in a .env file (outside git); sample keys are in docs/OPERATIONS.md.
 services:
   api:
     build: .
     environment:
-      IPIND_JWT_SECRET: ${IPIND_JWT_SECRET:?تنظیم نشده}
-      IPIND_ENCRYPTION_KEY: ${IPIND_ENCRYPTION_KEY:?تنظیم نشده}
-      IPIND_DATABASE_URL: postgresql+psycopg2://ipind:${POSTGRES_PASSWORD:?تنظیم نشده}@db:5432/ipind2
+      IPIND_JWT_SECRET: ${IPIND_JWT_SECRET:?not set}
+      IPIND_ENCRYPTION_KEY: ${IPIND_ENCRYPTION_KEY:?not set}
+      IPIND_DATABASE_URL: postgresql+psycopg2://ipind:${POSTGRES_PASSWORD:?not set}@db:5432/ipind2
       IPIND_REDIS_URL: redis://redis:6379/0
       IPIND_MODEL_DIR: /models
     volumes:
@@ -24,7 +24,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ipind
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?تنظیم نشده}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?not set}
       POSTGRES_DB: ipind2
     volumes: [pgdata:/var/lib/postgresql/data]
   redis:

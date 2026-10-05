@@ -1,16 +1,16 @@
 """
-ساخت کتابخانه seed اولیه (NFR-10: ≥ ۱ میلیون ساختار مرجع).
+Building the initial seed library (NFR-10: ≥ 1 million reference structures).
 
-دو منبع:
+Two sources:
 
-* **ترکیبیاتی** — نمونه‌برداری *بدون جای‌گذاری* از کل فضای قالب‌ها (تقریباً ۲٫۵ میلیون
-  ساختار)، بدون تکرار شاخص و با اعتبارسنجی RDKit؛
-* **پایگاه‌های عمومی** — فایل‌های SMILES/CSV که کاربر از PubChem/ZINC دانلود کرده است
-  (به‌دلیل مجوز و حجم، همراه مخزن نیستند).
+* **Combinatorial** — sampling *without replacement* from the entire template space (about 2.5 million
+  structures), with no repeated index and with RDKit validation;
+* **Public databases** — SMILES/CSV files that the user has downloaded from PubChem/ZINC
+  (not shipped with the repo due to license and size).
 
-⚠️ NFR-10 مبدأ «پایگاه‌های عمومی» را می‌خواهد. گزارش ``SeedLibraryReport.n_public`` صریحاً
-نشان می‌دهد چند ساختار از فایل‌های عمومی آمده؛ اگر صفر باشد، شرط «حداقل ۱ میلیون» از
-منبع ترکیبیاتی برآورده شده نه از پایگاه عمومی.
+⚠️ NFR-10 requires the origin to be "public databases". The ``SeedLibraryReport.n_public`` report explicitly
+shows how many structures came from public files; if it is zero, the "at least 1 million" condition is
+satisfied from the combinatorial source and not from a public database.
 """
 
 import csv
@@ -46,7 +46,7 @@ class SeedLibraryReport:
 
 
 def _decode(template: StructureTemplate, index: int) -> str:
-    """نگاشت یک اندیس ترکیبی (mixed radix) به SMILES قالب."""
+    """Map a combined index (mixed radix) to the template SMILES."""
     choices = {}
     for slot, options in reversed(template.slots):
         index, position = divmod(index, len(options))
@@ -66,7 +66,7 @@ def _sample_indices(n: int, seed: int) -> Iterator[Tuple[StructureTemplate, int]
 
 
 def read_public_smiles(paths: Sequence[str]) -> Iterator[str]:
-    """خواندن SMILES از فایل‌های ``.smi``/``.txt`` (ستون اول) یا ``.csv`` (ستون smiles/SMILES)."""
+    """Read SMILES from ``.smi``/``.txt`` files (first column) or ``.csv`` (smiles/SMILES column)."""
     for path in paths:
         file = Path(path)
         if file.suffix.lower() == ".csv":
@@ -74,7 +74,7 @@ def read_public_smiles(paths: Sequence[str]) -> Iterator[str]:
                 reader = csv.DictReader(handle)
                 column = next((c for c in (reader.fieldnames or []) if c.lower() == "smiles"), None)
                 if column is None:
-                    raise ValueError(f"ستون smiles در {file.name} یافت نشد")
+                    raise ValueError(f"smiles column not found in {file.name}")
                 for row in reader:
                     yield row[column]
         else:
@@ -94,7 +94,7 @@ def build_seed_library(
     progress: Optional[callable] = None,
 ) -> SeedLibraryReport:
     """
-    ساخت کتابخانه seed و ذخیره به‌صورت Parquet (ستون‌ها: ``smiles``, ``source``,
+    Build the seed library and save it as Parquet (columns: ``smiles``, ``source``,
     ``scaffold_type``, ``template``).
     """
     import pyarrow as pa
@@ -131,7 +131,7 @@ def build_seed_library(
                 flush()
 
         target_comb = max(n - n_public, 0)
-        # اندکی بیش‌نمونه‌گیری تا پس از حذف نامعتبر/تکراری به هدف برسیم
+        # Slightly oversample so we reach the target after removing invalid/duplicate entries
         for template, index in _sample_indices(int(target_comb * 1.05) + 10, seed):
             if n_comb >= target_comb:
                 break

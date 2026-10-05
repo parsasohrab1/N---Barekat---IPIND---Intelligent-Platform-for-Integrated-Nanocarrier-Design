@@ -1,9 +1,9 @@
 """
-اجزای مشترک شبکه‌های عصبی واحدهای ۲ و ۳ (پیاده‌سازی با torch خالص).
+Shared neural-network components for Units 2 and 3 (implemented in pure torch).
 
-عمداً از ``torch-geometric`` استفاده نمی‌شود: گراف‌های نانوحامل کوچک‌اند (≤۱۲۸ اتم) و
-message passing متراکم (dense) روی آن‌ها هم سریع است و هم نصب پلتفرم را روی CPU/GPU
-بدون wheel اختصاصی ممکن می‌کند (نگاه کنید به docs/ARCHITECTURE.md).
+``torch-geometric`` is deliberately not used: nanocarrier graphs are small (≤128 atoms) and
+dense message passing on them is both fast and makes installing the platform on CPU/GPU possible
+without a dedicated wheel (see docs/ARCHITECTURE.md).
 """
 
 from .layers import AttentionReadout, DenseMessagePassing, masked_softmax

@@ -1,17 +1,17 @@
 """
-بنچمارک روی دیتاست عمومی واقعی (FR-12، معیار R2 در ``trl.py``).
+Benchmark on a real public dataset (FR-12, the R2 criterion in ``trl.py``).
 
-دیتاست ثبت‌شده: **LANTERN/AGILE HeLa** — ۱۱۰۰ لیپید یونیزه‌شونده (SMILES) با کارایی
-ترانسفکشن تجربی پیوسته (``Target``)؛ فایل ``data/AGILE.csv`` از مخزن MIT
-https://github.com/AsalMehradfar/LANTERN. فایل همراه مخزن نیست (دانلود کنید؛ ``data/external/``).
+Registered dataset: **LANTERN/AGILE HeLa** — 1100 ionizable lipids (SMILES) with continuous experimental
+transfection efficiency (``Target``); the file ``data/AGILE.csv`` from the MIT repo
+https://github.com/AsalMehradfar/LANTERN. The file is not shipped with the repo (download it into ``data/external/``).
 
-⚠️ این **همان ۱۴ ویژگی پلتفرم نیست** (اندازه، زتا، ...). فقط نشان می‌دهد معماری یادگیری
-(GNN چندوظیفه‌ای + ویژگی‌های global) روی داده تجربی واقعی هم رگرسیون معنادار می‌دهد و با
-خط پایه‌های ساده و با عددهای گزارش‌شده مقاله قابل‌مقایسه است. اعتبار ویژگی‌های خود پلتفرم
-روی داده واقعی (LNP-622/LANCE/آزمایشگاه) هنوز لازم است.
+⚠️ This is **not the platform's own 14 properties** (size, zeta, ...). It only shows that the learning architecture
+(multi-task GNN + global features) gives meaningful regression on real experimental data too and is
+comparable with simple baselines and with the numbers reported in the paper. Validation of the platform's own properties
+on real data (LNP-622/LANCE/lab) is still required.
 
-اعداد مقاله (LANTERN، arXiv 2507.03209، چکیده): MLP با Morgan+Expert: R²=۰٫۸۱۶۱، AGILE:
-R²=۰٫۲۶۵۵. پروتکل split مقاله با اینجا یکی نیست؛ مقایسه فقط **تقریبی** است.
+Paper numbers (LANTERN, arXiv 2507.03209, abstract): MLP with Morgan+Expert: R²=0.8161, AGILE:
+R²=0.2655. The paper's split protocol is not the same as here; the comparison is only **approximate**.
 """
 
 import argparse
@@ -37,7 +37,7 @@ PUBLISHED = {
     "citation": "LANTERN, arXiv:2507.03209",
     "mlp_morgan_expert_r2": 0.8161,
     "agile_r2": 0.2655,
-    "caveat": "پروتکل split با اینجا یکی نیست؛ مقایسه تقریبی است",
+    "caveat": "The split protocol is not the same as here; the comparison is approximate",
 }
 
 
@@ -66,11 +66,11 @@ class PublicBenchmarkReport:
         }
 
     def to_markdown(self) -> str:
-        lines = ["| مدل | RMSE | R² |", "|---|---|---|"]
+        lines = ["| Model | RMSE | R² |", "|---|---|---|"]
         for model, s in self.summary().items():
             lines.append(f"| {model} | {s['rmse_mean']:.3f} ± {s['rmse_sd']:.3f} | {s['r2_mean']:.3f} ± {s['r2_sd']:.3f} |")
-        lines.append(f"| مقاله: MLP (Morgan+Expert) | — | {PUBLISHED['mlp_morgan_expert_r2']} |")
-        lines.append(f"| مقاله: AGILE | — | {PUBLISHED['agile_r2']} |")
+        lines.append(f"| Paper: MLP (Morgan+Expert) | — | {PUBLISHED['mlp_morgan_expert_r2']} |")
+        lines.append(f"| Paper: AGILE | — | {PUBLISHED['agile_r2']} |")
         return "\n".join(lines)
 
 
@@ -83,14 +83,14 @@ def run_public_benchmark(
     history: Optional[BenchmarkHistory] = None,
     model_version: str = "ipind2-gnn",
 ) -> PublicBenchmarkReport:
-    """سه مدل روی چند split تصادفی: میانگین ثابت (R²≈۰)، RandomForest+Morgan، و GNN پلتفرم."""
+    """Three models on several random splits: constant mean (R²≈0), RandomForest+Morgan, and the platform GNN."""
     frame = load_reference_dataset(DATASET_NAME, csv_path).rename(columns={"SMILES": "smiles"})
     smiles = frame["smiles"].tolist()
     target = frame["Target"].to_numpy(dtype=np.float32)
     fingerprints = _morgan(smiles)
     extended, kept = extended_matrix(smiles)
     if len(kept) != len(smiles):
-        raise ValueError("SMILES نامعتبر در دیتاست")
+        raise ValueError("Invalid SMILES in dataset")
 
     per_model: Dict[str, Dict[str, List[float]]] = {
         name: {"rmse": [], "r2": []} for name in ("mean-baseline", "random-forest (Morgan)", "ipind2-gnn")

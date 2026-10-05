@@ -1,9 +1,9 @@
 """
-ارزیاب‌های تابع هدف برای بهینه‌ساز: پیش‌بین‌های واحد ۲/۳ و oracle مرجع.
+Objective-function evaluators for the optimizer: Unit 2/3 predictors and the reference oracle.
 
-* ``PredictorObjective`` — ارزیاب تولیدی: خروجی GNN فیزیکوشیمیایی + Transformer زیستی.
-* ``oracle_objective`` — قوانین حقیقت زمینی داده سنتتیک بدون نویز؛ فقط برای
-  بنچمارک بهینه‌ساز (آیا PG-RL از جست‌وجوی تصادفی بهتر است؟) و تست‌های سریع.
+* ``PredictorObjective`` — production evaluator: physicochemical GNN output + biological Transformer.
+* ``oracle_objective`` — noise-free ground-truth rules of the synthetic data; only for
+  optimizer benchmarking (is PG-RL better than random search?) and fast tests.
 """
 
 from typing import Sequence
@@ -17,19 +17,19 @@ from .objectives import OBJECTIVE_COLUMNS
 
 
 def _scaffold_of(smiles: str) -> str:
-    """حدس نوع اسکلت از روی عناصر/گروه‌ها (برای ارزیاب oracle که قالب را نمی‌بیند)."""
+    """Guess the scaffold type from elements/groups (for the oracle evaluator that cannot see the template)."""
     mol = parse_smiles(smiles)
     symbols = {a.GetSymbol() for a in mol.GetAtoms()}
     if symbols & {"Au", "Fe", "Si", "Zn", "Mn", "Gd"}:
         return "metal"
     features = extended_dict(mol)
-    # پلیمرها: تعداد زیاد پیوند استری/اتری تکرارشونده؛ لیپیدها: دم‌های بلند بدون تکرار
+    # Polymers: many repeating ester/ether bonds; lipids: long tails without repetition
     repeat_signal = features["n_ether_ch2"] + features["n_ester"] + features["n_amide"]
     return "polymer" if repeat_signal >= 4 else "lipid"
 
 
 def oracle_objective(smiles_list: Sequence[str]) -> pd.DataFrame:
-    """ارزیاب بدون نویز مبتنی بر قوانین ساختار→خاصیت (برای بنچمارک/تست)."""
+    """Noise-free evaluator based on structure→property rules (for benchmark/test)."""
     rng = np.random.default_rng(0)
     rows = []
     for smiles in smiles_list:
@@ -44,10 +44,10 @@ def oracle_objective(smiles_list: Sequence[str]) -> pd.DataFrame:
 
 class PredictorObjective:
     """
-    تابع هدف مبتنی بر پیش‌بین‌های آموزش‌دیده.
+    Objective function based on trained predictors.
 
-    ``__call__(smiles) -> DataFrame`` با ستون‌های ``OBJECTIVE_COLUMNS``؛ ردیف‌های
-    SMILES نامعتبر حذف نمی‌شوند بلکه با مقدار بد پر می‌شوند تا ترتیب حفظ شود.
+    ``__call__(smiles) -> DataFrame`` with ``OBJECTIVE_COLUMNS`` columns; rows of
+    invalid SMILES are not dropped but filled with a bad value so the order is preserved.
     """
 
     def __init__(self, physico_predictor, bio_predictor, uncertainty_penalty: float = 0.0):
@@ -66,8 +66,8 @@ class PredictorObjective:
                 (phys_mean, phys_std) if column.startswith("phys_") else (bio_mean, bio_std)
             )
             values = source_mean[column]
-            # بدبینی در برابر عدم‌قطعیت: از اهداف حداکثرسازی، k·σ کم می‌شود. اندازه
-            # مستثنی است چون هدفش «نزدیکی به بازه» است نه حداکثرسازی خطی.
+            # Pessimism against uncertainty: k·σ is subtracted from maximization objectives. Size
+            # is exempt because its objective is "closeness to the range", not linear maximization.
             if self.uncertainty_penalty and column != OBJECTIVE_COLUMNS["size_fit"]:
                 values = values - self.uncertainty_penalty * source_std[column]
             frame.loc[values.index, column] = values.to_numpy()

@@ -1,8 +1,8 @@
 """
-ابزارهای آموزش مشترک: نرمال‌سازی هدف، Early Stopping و حلقه آموزش رگرسیون چندوظیفه‌ای.
+Shared training tools: target normalization, Early Stopping and the multi-task regression training loop.
 
-``train_regressor`` هم برای آموزش اولیه واحدهای ۲/۳ و هم برای fine-tuning در حلقه
-یادگیری فعال (واحد ۶، FR-06: «Fine-tuning با Early Stopping») استفاده می‌شود.
+``train_regressor`` is used both for the initial training of Units 2/3 and for fine-tuning in the
+active learning loop (Unit 6, FR-06: "Fine-tuning with Early Stopping").
 """
 
 from dataclasses import dataclass, field
@@ -15,10 +15,10 @@ from torch import nn
 
 @dataclass
 class TargetScaler:
-    """نرمال‌سازی z-score هر وظیفه (هدف) به‌صورت مستقل.
+    """z-score normalization of each task (target) independently.
 
-    اهداف واحد ۲ مقیاس‌های کاملاً متفاوتی دارند (اندازه ~۱۰۰ nm، PDI ~۰.۱)؛ بدون
-    نرمال‌سازی، loss وظیفه‌های بزرگ‌مقیاس بر آموزش غالب می‌شود.
+    Unit 2 targets have completely different scales (size ~100 nm, PDI ~0.1); without
+    normalization, the loss of large-scale tasks dominates training.
     """
 
     mean: np.ndarray = field(default_factory=lambda: np.zeros(1, dtype=np.float32))
@@ -50,11 +50,11 @@ class TargetScaler:
 
 
 class EarlyStopping:
-    """توقف زودهنگام بر اساس بهبود نیافتن loss اعتبارسنجی."""
+    """Early stopping based on no improvement of the validation loss."""
 
     def __init__(self, patience: int = 10, min_delta: float = 1e-4):
         if patience < 1:
-            raise ValueError("patience باید حداقل ۱ باشد")
+            raise ValueError("patience must be at least 1")
         self.patience = patience
         self.min_delta = min_delta
         self.best: float = float("inf")
@@ -63,7 +63,7 @@ class EarlyStopping:
         self.best_state: Optional[Dict[str, torch.Tensor]] = None
 
     def step(self, loss: float, epoch: int, model: Optional[nn.Module] = None) -> bool:
-        """یک epoch را ثبت می‌کند و ``True`` برمی‌گرداند اگر باید متوقف شد."""
+        """Records one epoch and returns ``True`` if training should stop."""
         if loss < self.best - self.min_delta:
             self.best = loss
             self.best_epoch = epoch
@@ -75,17 +75,17 @@ class EarlyStopping:
         return self._bad_epochs >= self.patience
 
     def restore(self, model: nn.Module) -> None:
-        """بازگرداندن بهترین وزن‌های ثبت‌شده (اگر موجود باشد)."""
+        """Restore the best recorded weights (if available)."""
         if self.best_state is not None:
             model.load_state_dict(self.best_state)
 
 
 def masked_huber_loss(predictions: torch.Tensor, targets: torch.Tensor, delta: float = 1.0) -> torch.Tensor:
     """
-    Huber loss که مقادیر NaN در ``targets`` را نادیده می‌گیرد.
+    Huber loss that ignores NaN values in ``targets``.
 
-    داده آزمایشگاهی معمولاً فقط بخشی از اهداف را اندازه می‌گیرد (مثلاً ۴ از ۱۲ ویژگی)؛
-    این ماسک اجازه می‌دهد همان سطرِ جزئی‌برچسب برای fine-tuning استفاده شود.
+    Lab data usually measures only some of the targets (e.g., 4 of 12 properties);
+    this mask allows that same partially-labeled row to be used for fine-tuning.
     """
     mask = ~torch.isnan(targets)
     if not bool(mask.any()):
@@ -98,7 +98,7 @@ def masked_huber_loss(predictions: torch.Tensor, targets: torch.Tensor, delta: f
 
 @dataclass
 class TrainingHistory:
-    """تاریخچه آموزش برای گزارش و تست همگرایی."""
+    """Training history for reporting and convergence tests."""
 
     train_loss: List[float] = field(default_factory=list)
     val_loss: List[float] = field(default_factory=list)
@@ -121,17 +121,17 @@ def train_regressor(
     verbose: bool = False,
 ) -> TrainingHistory:
     """
-    حلقه آموزش رگرسیون چندوظیفه‌ای با Huber loss و Early Stopping.
+    Multi-task regression training loop with Huber loss and Early Stopping.
 
-    ``forward_fn(model, batch_indices) -> پیش‌بینی (B, T)`` تا این تابع از نوع ورودی
-    (گراف برای واحد ۲، دنباله توکن برای واحد ۳) مستقل بماند.
+    ``forward_fn(model, batch_indices) -> prediction (B, T)`` so that this function stays independent of the input type
+    (graph for Unit 2, token sequence for Unit 3).
 
     Args:
-        targets: اهداف نرمال‌شده به شکل (n_samples, n_tasks).
-        val_fraction: سهم داده اعتبارسنجی؛ ۰ یعنی بدون early stopping.
+        targets: normalized targets with shape (n_samples, n_tasks).
+        val_fraction: share of validation data; 0 means no early stopping.
     """
     if n_samples < 2:
-        raise ValueError("آموزش به حداقل ۲ نمونه نیاز دارد")
+        raise ValueError("Training requires at least 2 samples")
 
     generator = np.random.default_rng(seed)
     indices = generator.permutation(n_samples)
@@ -188,7 +188,7 @@ def train_regressor(
 def split_indices(
     n_samples: int, test_fraction: float = 0.2, seed: int = 0
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """تقسیم تصادفی اندیس‌ها به (train, test) — برای اعتبارسنجی NFR-01..NFR-03."""
+    """Random split of indices into (train, test) — for NFR-01..NFR-03 validation."""
     indices = np.random.default_rng(seed).permutation(n_samples)
     n_test = max(1, int(round(test_fraction * n_samples)))
     return indices[n_test:], indices[:n_test]

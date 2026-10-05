@@ -1,4 +1,4 @@
-"""تست‌های خط لوله انتها‌به‌انتها، مدل جانشین تفسیر و حلقه کامل بازخورد (جریان داده SRS §3.2)."""
+"""Tests of the end-to-end pipeline, the interpretation surrogate model and the full feedback loop (SRS §3.2 data flow)."""
 
 import numpy as np
 import pytest
@@ -9,7 +9,7 @@ from ipind2.nlp_interface import TargetParameters
 from ipind2.pipeline import DesignPipeline
 from ipind2.training import ModelBundle
 
-QUERY = "یک نانوحامل لیپیدی برای هدف‌گیری تومور، اندازه بین ۸۰ تا ۱۲۰ نانومتر"
+QUERY = "A lipid nanocarrier for tumor targeting, size between 80 to 120 nm"
 
 
 @pytest.fixture(scope="module")
@@ -36,7 +36,7 @@ class TestEndToEnd:
 
     def test_predictions_cover_all_twelve_unit_outputs_with_confidence(self, result):
         candidate = result.final_candidates[0]
-        assert len(candidate["predictions"]) == 14  # ۷ فیزیکوشیمیایی + ۷ زیستی (۳ رده سلولی)
+        assert len(candidate["predictions"]) == 14  # 7 physicochemical + 7 biological (3 cell lines)
         assert all(0.0 <= v <= 1.0 for v in candidate["confidence"].values())
         assert 0.0 <= candidate["overall_confidence"] <= 1.0
 
@@ -61,7 +61,7 @@ class TestEndToEnd:
 
     def test_md_honesty_surfaces_in_warnings_and_flags(self, result):
         assert result.validation is not None and not result.validation.md_complete
-        assert any("MD واقعی" in w for w in result.warnings)
+        assert any("real MD" in w for w in result.warnings)
         assert result.to_dict()["md_complete"] is False
 
     def test_stats_report_timings_and_generation_validity(self, result):
@@ -77,7 +77,7 @@ class TestEndToEnd:
     def test_impossible_constraints_produce_clear_warning_not_crash(self, pipeline):
         params = TargetParameters(scaffold_type="lipid", size_range_nm=(1.0, 2.0))
         out = pipeline.design(params, n_generate=50, n_pareto=3, n_final=1, optimize_iterations=4, run_md=False, explain=False)
-        assert out.final_candidates == [] and any("قیود" in w for w in out.warnings)
+        assert out.final_candidates == [] and any("constraints" in w for w in out.warnings)
 
     def test_unknown_tissue_noted_not_silently_ignored(self, pipeline):
         params = TargetParameters(scaffold_type="lipid", target_tissue="spleen", size_range_nm=(60.0, 140.0))

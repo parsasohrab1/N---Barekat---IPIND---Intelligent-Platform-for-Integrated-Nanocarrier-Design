@@ -1,4 +1,4 @@
-"""تست‌های واحد ۶ (FR-06): نمونه‌برداری، بافر، آستانه به‌روزرسانی و fine-tuning."""
+"""Unit 6 tests (FR-06): sampling, buffer, update threshold and fine-tuning."""
 
 import copy
 
@@ -17,7 +17,7 @@ from ipind2.physicochemical import PHYSICO_TARGET_COLUMNS, PhysicochemicalPredic
 
 @pytest.fixture(scope="module")
 def lipid_model_and_polymers():
-    """مدلی که فقط لیپید دیده؛ داده جدید پلیمر است ⇒ shift توزیع واقعی."""
+    """A model that has seen only lipids; the new data is polymer ⇒ a real distribution shift."""
     from ipind2.data_generation.synthetic_data_generator import SyntheticDataGenerator
 
     generator = SyntheticDataGenerator(51)
@@ -44,7 +44,7 @@ class TestUncertaintySampling:
         model, lipids, polymers = lipid_model_and_polymers
         in_dist, _ = committee_uncertainty([model], lipids.smiles.tolist()[:60])
         out_dist, _ = committee_uncertainty([model], polymers.smiles.tolist()[:60])
-        assert out_dist.mean() > in_dist.mean()  # Query-by-Committee باید شیفت را حس کند
+        assert out_dist.mean() > in_dist.mean()  # Query-by-Committee must sense the shift
 
     def test_requires_a_committee(self, lipid_model_and_polymers):
         model, _, polymers = lipid_model_and_polymers
@@ -61,7 +61,7 @@ class TestUncertaintySampling:
         model, _, polymers = lipid_model_and_polymers
         pool = polymers.smiles.tolist()[:80] + ["bad((("]
         picks = select_samples(pool, [model], 12, strategy, seed=1)
-        assert len(picks) == len(set(picks)) == 12 and 80 not in picks  # SMILES نامعتبر انتخاب نمی‌شود
+        assert len(picks) == len(set(picks)) == 12 and 80 not in picks  # invalid SMILES is not selected
 
     def test_uncertainty_strategy_picks_the_most_uncertain(self, lipid_model_and_polymers):
         model, _, polymers = lipid_model_and_polymers
@@ -118,9 +118,9 @@ class TestLoopBuffering:
         loop = self._loop(model, polymers)
         frame = pd.DataFrame([
             {"molecule_id": 0, "experimental_size_nm": 100.0},
-            {"molecule_id": 999999, "experimental_size_nm": 100.0},  # شناخته‌نشده
-            {"molecule_id": 1},                                     # بدون مقدار
-            {"molecule_id": None, "experimental_size_nm": 5.0},      # بدون شناسه
+            {"molecule_id": 999999, "experimental_size_nm": 100.0},  # unknown
+            {"molecule_id": 1},                                     # no value
+            {"molecule_id": None, "experimental_size_nm": 5.0},      # no ID
         ])
         assert loop.ingest(frame) == 1
 
@@ -137,7 +137,7 @@ class TestLoopBuffering:
 
 class TestFineTuningUnderShift:
     def test_few_lab_results_reduce_error_on_unseen_class(self, lipid_model_and_polymers):
-        """رفتار اصلی FR-06: ~۳۰ نتیجه آزمایشگاهی خطای کلاس جدید را به‌طور معنادار کم می‌کند."""
+        """Main FR-06 behavior: ~30 lab results meaningfully reduce the error on the new class."""
         model, lipids, polymers = lipid_model_and_polymers
         holdout = polymers.iloc[150:].reset_index(drop=True)
         pool = polymers.iloc[:150].reset_index(drop=True)
@@ -159,11 +159,11 @@ class TestFineTuningUnderShift:
             {"physico": copy.deepcopy(model)}, {i: s for i, s in enumerate(polymers.smiles)}, replay=lipids, seed=2
         )
         before = model.predict(polymers.smiles.tolist()[:20])
-        loop.ingest(_lab_frame(polymers, range(12)))  # فقط ۳ ستون از ۷ هدف اندازه‌گیری شده
+        loop.ingest(_lab_frame(polymers, range(12)))  # only 3 of 7 targets measured
         loop.retrain(epochs=10)
         after = loop.predictors["physico"].predict(polymers.smiles.tolist()[:20])
         assert np.all(np.isfinite(after.to_numpy()))
-        # PDI اندازه‌گیری نشده؛ باید در بازه فیزیکی بماند (نه منفجر/NaN)
+        # PDI not measured; it must stay in the physical range (not blow up/NaN)
         assert after["phys_pdi"].between(-0.2, 1.0).all()
 
     def test_second_retrain_without_new_data_is_noop(self, lipid_model_and_polymers):

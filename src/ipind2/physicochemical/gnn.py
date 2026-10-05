@@ -1,9 +1,9 @@
 """
-GNN چندوظیفه‌ای (MPNN + Attention) برای پیش‌بینی هم‌زمان ۷ ویژگی فیزیکوشیمیایی (FR-02).
+Multi-task GNN (MPNN + Attention) for simultaneous prediction of 7 physicochemical properties (FR-02).
 
-معماری: سه لایه message passing → readout با attention اتمی → الحاق با بردار ویژگی global
-(توصیف‌گر + گروه عاملی) → trunk مشترک → سر خطی هر وظیفه. تجمیع global همان الگوی
-D-MPNN + RDKit-features است که روی داده‌های کوچک پایدارتر از GNN خالص است.
+Architecture: three message-passing layers → readout with atomic attention → concatenation with the global feature vector
+(descriptors + functional group) → shared trunk → linear head per task. The global aggregation is the same
+D-MPNN + RDKit-features pattern that is more stable than a pure GNN on small data.
 """
 
 from typing import Sequence
@@ -71,7 +71,7 @@ EnsemblePropertyPredictor.MODEL_FACTORIES["gnn"] = MultiTaskGNN
 
 
 class PhysicochemicalPredictor(EnsemblePropertyPredictor):
-    """پیش‌بین فیزیکوشیمیایی (واحد ۲)؛ ۷ هدف FR-02 به‌طور پیش‌فرض."""
+    """Physicochemical predictor (Unit 2); 7 FR-02 targets by default."""
 
     def __init__(
         self,

@@ -1,16 +1,16 @@
 """
-مولد ساختار شرطی (ensemble از CVAE و CGAN) — واحد ۱ (FR-01).
+Conditional structure generator (ensemble of CVAE and CGAN) — Unit 1 (FR-01).
 
-جریان: مدل‌ها روی (ویژگی مولکول | ویژگی هدف + نوع اسکلت) آموزش می‌بینند؛ در زمان تولید،
-برای یک «شرط» (مثلاً اندازه ۱۰۰ nm، زتای مثبت، لیپیدی) بردار ویژگی هدف نمونه‌برداری
-می‌شود و با نزدیک‌ترین همسایه در *استخر ساختارهای معتبر* (ساخته‌شده از قالب‌های
-``building_blocks``) به SMILES واقعی نگاشت می‌شود. بنابراین:
+Flow: models are trained on (molecule features | target features + scaffold type); at generation time,
+for a "condition" (e.g., size 100 nm, positive zeta, lipid) a target feature vector is sampled
+and mapped to a real SMILES by nearest neighbor in the *pool of valid structures* (built from the templates of
+``building_blocks``). Therefore:
 
-* اعتبار شیمیایی ساختارها ۱۰۰٪ است (و با RDKit بازبینی می‌شود)،
-* مدل‌های عمیق تعیین می‌کنند *کدام* ناحیه از فضای ساختاری مطلوب است،
-* خروجی‌ها رد‌یابی‌پذیرند (قالب + بلوک‌های سازنده در ``GeneratedStructure.slots``).
+* the chemical validity of structures is 100% (and is re-checked with RDKit),
+* the deep models determine *which* region of the structural space is desirable,
+* outputs are traceable (template + building blocks in ``GeneratedStructure.slots``).
 
-See docs/SRS.md §4.1 (FR-01) و §4.8 (ورودی از رابط زبان طبیعی).
+See docs/SRS.md §4.1 (FR-01) and §4.8 (input from the natural-language interface).
 """
 
 import json
@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-# joblib روی ویندوز بدون ``wmic`` هشدار می‌دهد؛ تعداد هسته را صریح می‌دهیم.
+# joblib warns on Windows without ``wmic``; we give the core count explicitly.
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(os.cpu_count() or 1))
 
 from sklearn.neighbors import NearestNeighbors
@@ -46,9 +46,9 @@ CONDITION_KEYS: Tuple[str, ...] = ("size_nm", "zeta_mV", "loading_efficiency", "
 @dataclass
 class GenerationCondition:
     """
-    شرط تولید. مقدار ``None`` یعنی «بی‌اهمیت» و با میانه آموزش جایگزین می‌شود.
+    Generation condition. A ``None`` value means "don't care" and is replaced by the training median.
 
-    ``scaffold_type`` اگر ``None`` باشد، نوع اسکلت به‌طور یکنواخت نمونه‌برداری می‌شود.
+    If ``scaffold_type`` is ``None``, the scaffold type is sampled uniformly.
     """
 
     scaffold_type: Optional[str] = None
@@ -63,10 +63,10 @@ class GenerationCondition:
     @classmethod
     def from_target_parameters(cls, params) -> "GenerationCondition":
         """
-        تبدیل خروجی رابط زبان طبیعی (``nlp_interface.TargetParameters``) به شرط تولید.
+        Convert the natural-language interface output (``nlp_interface.TargetParameters``) to a generation condition.
 
-        بازه اندازه به نقطه میانی‌اش نگاشت می‌شود؛ کارایی بارگذاری حداقلی، با اندکی
-        حاشیه بالاتر از حداقل مدنظر قرار می‌گیرد.
+        The size range is mapped to its midpoint; the minimum loading efficiency is taken with a small
+        margin above the minimum.
         """
         size = None
         if params.size_range_nm is not None:
@@ -81,7 +81,7 @@ class GenerationCondition:
 
 
 class ConditionalStructureGenerator:
-    """ensemble شرطی CVAE+CGAN با بازیابی از استخر ساختارهای معتبر."""
+    """Conditional CVAE+CGAN ensemble with retrieval from the pool of valid structures."""
 
     def __init__(self, latent_dim: int = 8, hidden: int = 128, seed: int = 0):
         self.latent_dim = latent_dim
@@ -127,16 +127,16 @@ class ConditionalStructureGenerator:
         verbose: bool = False,
     ) -> "ConditionalStructureGenerator":
         """
-        آموزش روی دیتافریم با ستون‌های ``smiles``، ``scaffold_type`` و ``CONDITION_COLUMNS``
-        و ساخت استخر بازیابی.
+        Train on a dataframe with columns ``smiles``, ``scaffold_type`` and ``CONDITION_COLUMNS``
+        and build the retrieval pool.
         """
         missing = [c for c in ("smiles", "scaffold_type", *CONDITION_COLUMNS) if c not in df.columns]
         if missing:
-            raise ValueError(f"ستون‌های لازم در دیتافریم نیست: {missing}")
+            raise ValueError(f"Required columns are missing from the dataframe: {missing}")
 
         features, kept = extended_matrix(df["smiles"].tolist())
         if len(kept) < 50:
-            raise ValueError("برای آموزش مولد حداقل ۵۰ ساختار معتبر لازم است")
+            raise ValueError("At least 50 valid structures are required to train the generator")
         rows = df.iloc[kept].reset_index(drop=True)
         torch.manual_seed(self.seed)
 
@@ -245,7 +245,7 @@ class ConditionalStructureGenerator:
             out = self.vae.sample(c)
         elif use == "gan":
             out = self.gan.sample(c)
-        else:  # ensemble: نیمی از نمونه‌ها از هر مدل
+        else:  # ensemble: half of the samples from each model
             out = torch.cat([self.vae.sample(c[:half]), self.gan.sample(c[half:])], dim=0)
         return out.numpy()
 
@@ -258,19 +258,19 @@ class ConditionalStructureGenerator:
         seed: Optional[int] = None,
     ) -> Tuple[List[GeneratedStructure], LibraryStats]:
         """
-        تولید ``n`` ساختار یکتا و معتبر برای شرط داده‌شده.
+        Generate ``n`` unique, valid structures for the given condition.
 
         Args:
             model: ``'vae'`` | ``'gan'`` | ``'ensemble'``.
-            neighbours: از میان k همسایه نزدیک هر بردار هدف، یکی تصادفی انتخاب می‌شود
-                (برای تنوع؛ ``1`` یعنی قطعی‌ترین نگاشت).
+            neighbours: among the k nearest neighbors of each target vector, one is chosen at random
+                (for diversity; ``1`` means the most deterministic mapping).
         """
         if self.vae is None or not self._indexes:
-            raise RuntimeError("مولد آموزش ندیده؛ ابتدا fit() یا load() را فراخوانی کنید")
+            raise RuntimeError("Generator is not trained; call fit() or load() first")
         if n <= 0:
-            raise ValueError("n باید مثبت باشد")
+            raise ValueError("n must be positive")
         if model not in ("vae", "gan", "ensemble"):
-            raise ValueError("model باید یکی از vae/gan/ensemble باشد")
+            raise ValueError("model must be one of vae/gan/ensemble")
 
         condition = condition or GenerationCondition()
         rng = np.random.default_rng(self.seed if seed is None else seed)
@@ -280,7 +280,7 @@ class ConditionalStructureGenerator:
         available = [t for t in SCAFFOLD_TYPES if t in self._indexes]
         if condition.scaffold_type is not None:
             if condition.scaffold_type not in available:
-                raise ValueError(f"نوع اسکلت نامعتبر یا بدون استخر: {condition.scaffold_type!r}")
+                raise ValueError(f"Invalid scaffold type or no pool: {condition.scaffold_type!r}")
             available = [condition.scaffold_type]
 
         structures: List[GeneratedStructure] = []
@@ -325,14 +325,14 @@ class ConditionalStructureGenerator:
                         break
                 if len(structures) >= n:
                     break
-            # شرط باریک ⇒ بردارهای هدف خوشه می‌شوند و همسایه‌های تکراری برمی‌گردند؛ به‌جای
-            # کم‌تحویل‌دادن بی‌صدا، شعاع جست‌وجو را گسترش می‌دهیم (تنوع در برابر دقت شرط).
+            # Narrow condition ⇒ target vectors cluster and duplicate neighbors are returned; instead of
+            # silently under-delivering, we widen the search radius (diversity versus condition precision).
             if added_this_round < max(1, batch // 20):
                 k_effective = min(k_effective * 2, 64)
 
         structures = structures[:n]
         valid = sum(1 for s in structures if is_valid_smiles(s.smiles))
-        # اعتبار روی *خروجی نهایی* سنجیده می‌شود (نه روی تعداد بازیابی‌های خام).
+        # Validity is measured on the *final output* (not on the number of raw retrievals).
         stats = LibraryStats(
             requested=n,
             proposed=len(structures),
@@ -346,7 +346,7 @@ class ConditionalStructureGenerator:
     # ------------------------------------------------------------------
     def save(self, directory: str) -> None:
         if self.vae is None:
-            raise RuntimeError("مولد آموزش ندیده")
+            raise RuntimeError("Generator is not trained")
         path = Path(directory)
         path.mkdir(parents=True, exist_ok=True)
         meta = {

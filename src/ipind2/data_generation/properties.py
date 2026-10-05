@@ -1,18 +1,18 @@
 """
-مدل ساختار→خاصیت (مرجع شبیه‌سازی) برای داده‌های سنتتیک.
+Structure→property model (simulation reference) for synthetic data.
 
-این‌ها قوانین «حقیقت زمینی» داده سنتتیک‌اند، نه مدل پیش‌بینی. شکل قوانین از روندهای
-شناخته‌شده ادبیات نانوپزشکی الهام گرفته شده (جهت اثر درست، نه ضرایب کالیبره‌شده):
+These are the "ground truth" rules of the synthetic data, not a prediction model. The shape of the rules is inspired by
+well-known trends in the nanomedicine literature (correct direction of effect, not calibrated coefficients):
 
-* اندازه با وزن مولکولی و آبگریزی زیاد می‌شود؛ پلیمرها بزرگ‌تر از لیپیدها و
-  نانوذرات فلزی کوچک‌ترند.
-* پتانسیل زتا از بار یونی (آمونیوم چهارتایی/آمین +، اسید −) می‌آید.
-* سمیت کاتیونی (IC50 پایین‌تر برای آمونیوم چهارتایی و آبگریزی بالا)؛ PEG سمیت را کم می‌کند.
-* جذب سلولی با زتای مثبت و اندازه ~۱۰۰ nm بالاتر؛ نیمه‌عمر گردش با PEG بیشتر.
+* Size increases with molecular weight and hydrophobicity; polymers are larger than lipids and
+  metal nanoparticles are smaller.
+* Zeta potential comes from ionic charge (quaternary ammonium/amine +, acid −).
+* Cationic toxicity (lower IC50 for quaternary ammonium and high hydrophobicity); PEG reduces toxicity.
+* Cellular uptake is higher with positive zeta and size ~100 nm; circulation half-life is longer with PEG.
 
-⚠️ چون این‌ها قانون ساختگی‌اند، دقتی که مدل‌ها روی این داده می‌گیرند اثبات دقت روی داده
-واقعی نیست (نگاه کنید به docs/MODEL_VALIDATION.md). مدل‌ها باید با داده آزمایشگاهی
-بازآموزی شوند؛ این داده خط لوله و قابلیت یادگیری را تأیید می‌کند.
+⚠️ Because these are artificial rules, the accuracy the models achieve on this data is not proof of accuracy on
+real data (see docs/MODEL_VALIDATION.md). Models must be retrained with lab data;
+this data confirms the pipeline and its ability to learn.
 
 See docs/SRS.md §8.
 """
@@ -21,13 +21,13 @@ from typing import Dict
 
 import numpy as np
 
-# جابه‌جایی پایه برحسب کلاس اسکلت
+# Base shift by scaffold class
 _SIZE_OFFSET = {"lipid": 55.0, "polymer": 85.0, "metal": 30.0}
 _ZETA_OFFSET = {"lipid": 0.0, "polymer": -3.0, "metal": -8.0}
 _IC50_OFFSET = {"lipid": 0.0, "polymer": 18.0, "metal": 8.0}
 
 CELL_LINES = ("hek293", "hepg2", "hela")
-# حساسیت نسبی هر رده سلولی (ضریب ضرب‌شونده روی IC50)
+# Relative sensitivity of each cell line (multiplicative factor on IC50)
 _CELL_LINE_FACTOR = {"hek293": 1.0, "hepg2": 1.25, "hela": 0.85}
 
 NOISE_SD = {
@@ -53,7 +53,7 @@ def _clip(values, low, high):
 def physicochemical_truth(
     scaffold_type: str, features: Dict[str, float], rng: np.random.Generator, noise: float = 1.0
 ) -> Dict[str, float]:
-    """هفت ویژگی فیزیکوشیمیایی FR-02 از روی ویژگی‌های ساختاری."""
+    """The seven FR-02 physicochemical properties from structural features."""
     mw = features["mol_weight"]
     logp = features["logP"]
     cation = features["n_quat_ammonium"] + 0.5 * features["n_amine"]
@@ -67,7 +67,7 @@ def physicochemical_truth(
     size = _SIZE_OFFSET[scaffold_type] + 14.0 * np.log1p(mw / 150.0) + 1.5 * logp - 1.5 * np.sqrt(peg)
     size = _clip(size + n("size"), 10.0, 500.0)
 
-    # بار یونی با افزایش تعداد گروه‌ها اشباع می‌شود (پوشش یون‌های مخالف/کشیدگی دبای)
+    # Ionic charge saturates as the number of groups increases (counter-ion coverage/Debye screening)
     zeta = (
         _ZETA_OFFSET[scaffold_type]
         + 26.0 * np.tanh(cation / 2.0)
@@ -112,7 +112,7 @@ def biological_truth(
     rng: np.random.Generator,
     noise: float = 1.0,
 ) -> Dict[str, float]:
-    """پنج ویژگی زیستی FR-03 (سمیت روی ۳ رده سلولی + چهار ویژگی دیگر)."""
+    """The five FR-03 biological properties (toxicity on 3 cell lines + four other properties)."""
     logp = features["logP"]
     quat = features["n_quat_ammonium"]
     peg = features["n_ether_ch2"]

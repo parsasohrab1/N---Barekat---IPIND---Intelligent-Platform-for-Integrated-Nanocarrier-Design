@@ -1,4 +1,4 @@
-"""تست‌های واحد ۲ و ۳ (GNN، Transformer+GNN)، پیش‌بین ensemble و آموزش (FR-02، FR-03، FR-06)."""
+"""Unit 2 and 3 tests (GNN, Transformer+GNN), ensemble predictor and training (FR-02, FR-03, FR-06)."""
 
 import numpy as np
 import pytest
@@ -24,7 +24,7 @@ class TestLayers:
     def test_message_passing_zeroes_padding(self):
         nodes, adjacency, mask = (torch.from_numpy(a) for a in batch_graphs([smiles_to_graph("CCO"), smiles_to_graph("CCCCCC")]))
         out = DenseMessagePassing(NODE_FEATURE_DIM, 16)(nodes, adjacency, mask)
-        assert torch.all(out[0, 3:] == 0)  # اتم‌های padding نمونه کوتاه‌تر
+        assert torch.all(out[0, 3:] == 0)  # padding atoms of the shorter sample
 
     def test_readout_weights_sum_to_one_over_real_atoms(self):
         nodes, adjacency, mask = (torch.from_numpy(a) for a in batch_graphs([smiles_to_graph("CCO"), smiles_to_graph("CCCCCC")]))
@@ -33,7 +33,7 @@ class TestLayers:
         assert torch.allclose(weights.sum(dim=1), torch.ones(2), atol=1e-5) and torch.all(weights[0, 3:] == 0)
 
     def test_attention_extractor_integration(self):
-        """AttentionReadout با AttentionExtractor واحد ۷ (hook) سازگار است."""
+        """AttentionReadout is compatible with the Unit 7 AttentionExtractor (hook)."""
         from ipind2.interpretability import AttentionExtractor
 
         model = MultiTaskGNN(n_tasks=2, hidden_dim=16)
@@ -49,7 +49,7 @@ class TestTrainingUtilities:
         data = np.array([[1.0, 5.0], [3.0, 5.0], [5.0, 5.0]], dtype=np.float32)
         scaler = TargetScaler.fit(data)
         assert np.allclose(scaler.inverse_transform(scaler.transform(data)), data)
-        assert np.all(np.isfinite(scaler.transform(data)))  # ستون ثابت ⇒ تقسیم بر صفر نشود
+        assert np.all(np.isfinite(scaler.transform(data)))  # constant column ⇒ no division by zero
         restored = TargetScaler.from_state_dict(scaler.state_dict())
         assert np.allclose(restored.mean, scaler.mean)
 
@@ -67,7 +67,7 @@ class TestTrainingUtilities:
     def test_masked_loss_ignores_nan_targets(self):
         predictions = torch.tensor([[1.0, 100.0]])
         assert masked_huber_loss(predictions, torch.tensor([[1.0, float("nan")]])).item() == 0.0
-        assert masked_huber_loss(predictions, torch.tensor([[float("nan")] * 2])).item() == 0.0  # همه NaN ⇒ گرادیان صفر
+        assert masked_huber_loss(predictions, torch.tensor([[float("nan")] * 2])).item() == 0.0  # all NaN ⇒ zero gradient
         assert masked_huber_loss(predictions, torch.tensor([[0.0, 100.0]])).item() > 0
 
     def test_split_is_disjoint_and_complete(self):
@@ -88,7 +88,7 @@ def physico_model(request):
 
 class TestPhysicochemicalPredictor:
     def test_learns_structure_property_relationship(self, physico_model):
-        """R² معنادار روی داده نادیده — اگر مدل ساختار را نبیند، R² ≈ ۰ می‌شود."""
+        """Meaningful R² on unseen data — if the model does not see the structure, R² ≈ 0."""
         model, _, test = physico_model
         report = model.evaluate(test.smiles.tolist(), test[list(PHYSICO_TARGET_COLUMNS)].to_numpy())
         assert report.loc["phys_size_nm", "r2"] > 0.5
@@ -120,7 +120,7 @@ class TestPhysicochemicalPredictor:
         assert np.allclose(model.predict(smiles).to_numpy(), model.predict(smiles).to_numpy())
 
     def test_batch_composition_does_not_change_prediction(self, physico_model):
-        """padding/ماسک درست ⇒ پیش‌بینی یک مولکول به همراهان دسته بستگی ندارد."""
+        """Correct padding/masking ⇒ the prediction of one molecule does not depend on batch companions."""
         model, _, test = physico_model
         a, b = test.smiles.iloc[0], test.smiles.iloc[1]
         alone = model.predict([a]).iloc[0].to_numpy()
@@ -150,16 +150,16 @@ class TestPhysicochemicalPredictor:
         tuned = copy.deepcopy(model)
         rows = test.iloc[:30]
         targets = rows[list(PHYSICO_TARGET_COLUMNS)].to_numpy().copy()
-        targets[:, 2:] = np.nan  # فقط اندازه و زتا اندازه‌گیری شده
+        targets[:, 2:] = np.nan  # only size and zeta measured
         shifted = targets.copy()
-        shifted[:, 0] += 25.0  # اندازه‌گیری آزمایشگاهی سیستماتیک ۲۵ nm بزرگ‌تر
+        shifted[:, 0] += 25.0  # systematic lab measurement 25 nm larger
         before = model.predict(rows.smiles.tolist())["phys_size_nm"].mean()
         replay = train.iloc[:60]
         merged_smiles = rows.smiles.tolist() + replay.smiles.tolist()
         merged = np.vstack([shifted, replay[list(PHYSICO_TARGET_COLUMNS)].to_numpy()])
         tuned.fine_tune(merged_smiles, merged, epochs=25, learning_rate=1e-3)
         after = tuned.predict(rows.smiles.tolist())["phys_size_nm"].mean()
-        assert after > before + 5.0, "fine-tuning باید پیش‌بینی را به‌سمت داده جدید ببرد"
+        assert after > before + 5.0, "Fine-tuning must move the prediction toward the new data"
         assert np.all(np.isfinite(tuned.predict(test.smiles.tolist()[30:40]).to_numpy()))
 
     def test_untrained_and_bad_inputs(self):
@@ -167,19 +167,19 @@ class TestPhysicochemicalPredictor:
             PhysicochemicalPredictor().predict(["CCO"])
         model = PhysicochemicalPredictor(n_ensemble=1)
         with pytest.raises(ValueError):
-            model.fit(["CCO"] * 20, np.zeros((19, 7)))  # طول ناهمخوان
+            model.fit(["CCO"] * 20, np.zeros((19, 7)))  # mismatched length
         with pytest.raises(ValueError):
-            model.fit(["CCO"] * 20, np.zeros((20, 3)))  # تعداد هدف ناهمخوان
+            model.fit(["CCO"] * 20, np.zeros((20, 3)))  # mismatched number of targets
         with pytest.raises(ValueError):
-            model.fit(["bad((("] * 20, np.zeros((20, 7)))  # SMILES معتبر کافی نیست
+            model.fit(["bad((("] * 20, np.zeros((20, 7)))  # not enough valid SMILES
 
     def test_inference_speed_supports_nfr05(self, physico_model):
-        """NFR-05: <۱۰۰ ms برای هر ساختار (ensemble ۲ عضوی روی CPU)."""
+        """NFR-05: <100 ms per structure (ensemble of 2 members on CPU)."""
         import time
 
         model, _, test = physico_model
         smiles = test.smiles.tolist()[:64]
-        model.predict(smiles[:4])  # گرم‌کردن
+        model.predict(smiles[:4])  # warm-up
         started = time.perf_counter()
         model.predict(smiles)
         assert (time.perf_counter() - started) / len(smiles) < 0.1
@@ -196,7 +196,7 @@ class TestBiologicalPredictor:
         return model, data.iloc[750:]
 
     def test_three_cell_lines_and_four_other_targets(self):
-        assert len([c for c in BIO_TARGET_COLUMNS if "ic50" in c]) == 3  # FR-03: ≥۳ رده سلولی
+        assert len([c for c in BIO_TARGET_COLUMNS if "ic50" in c]) == 3  # FR-03: ≥3 cell lines
         assert len(BIO_TARGET_COLUMNS) == 7
 
     def test_learns_signal(self, bio_model):
@@ -225,7 +225,7 @@ class TestBiologicalPredictor:
 
 class TestConcurrency:
     def test_parallel_predictions_match_serial(self, physico_model):
-        """باگ بالقوه: GraphEncoder حالت per-call دارد؛ قفل باید نتیجه هم‌زمان را درست نگه دارد."""
+        """Potential bug: GraphEncoder has per-call state; the lock must keep concurrent results correct."""
         from concurrent.futures import ThreadPoolExecutor
 
         model, _, test = physico_model

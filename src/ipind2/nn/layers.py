@@ -1,4 +1,4 @@
-"""لایه‌های پایه: message passing متراکم و readout مبتنی بر attention (برای FR-02/FR-09)."""
+"""Base layers: dense message passing and attention-based readout (for FR-02/FR-09)."""
 
 import torch
 from torch import nn
@@ -6,24 +6,24 @@ from torch import nn
 
 def masked_softmax(scores: torch.Tensor, mask: torch.Tensor, dim: int = -1) -> torch.Tensor:
     """
-    softmax با نادیده‌گرفتن موقعیت‌های padding.
+    softmax ignoring padding positions.
 
     Args:
-        scores: تنسور امتیازها.
-        mask: تنسور هم‌شکل با ``scores`` که ۱=معتبر و ۰=padding.
+        scores: tensor of scores.
+        mask: tensor of the same shape as ``scores`` where 1=valid and 0=padding.
     """
     very_negative = torch.finfo(scores.dtype).min
     masked = scores.masked_fill(mask <= 0, very_negative)
     weights = torch.softmax(masked, dim=dim)
-    # اگر یک سطر کاملاً padding باشد softmax مقدار یکنواخت می‌دهد؛ صفر می‌کنیم.
+    # If a row is entirely padding, softmax gives a uniform value; we zero it.
     return weights * (mask > 0).to(weights.dtype)
 
 
 class DenseMessagePassing(nn.Module):
     """
-    یک لایه MPNN روی ماتریس مجاورت متراکم.
+    An MPNN layer on a dense adjacency matrix.
 
-    h' = ReLU(LayerNorm(W_self · h + W_neigh · (Â h)))  با Â مجاورت نرمال‌شده سطری.
+    h' = ReLU(LayerNorm(W_self · h + W_neigh · (Â h)))  with Â the row-normalized adjacency.
     """
 
     def __init__(self, in_dim: int, out_dim: int):
@@ -47,10 +47,10 @@ class DenseMessagePassing(nn.Module):
 
 class AttentionReadout(nn.Module):
     """
-    تجمیع اتم‌ها به یک بردار مولکولی با وزن‌های attention.
+    Aggregation of atoms into a molecular vector with attention weights.
 
-    وزن‌ها علاوه بر pooling، خروجی تفسیرپذیری واحد ۷ (FR-09) هستند: سهم هر اتم در
-    پیش‌بینی. برای همین ``forward`` وزن‌ها را هم برمی‌گرداند.
+    The weights, in addition to pooling, are the interpretability output of Unit 7 (FR-09): the contribution of each atom to the
+    prediction. For this reason ``forward`` also returns the weights.
     """
 
     def __init__(self, in_dim: int, hidden_dim: int = 64):

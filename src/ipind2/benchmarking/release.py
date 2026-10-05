@@ -1,15 +1,15 @@
 """
-بنچمارک هر انتشار مدل + دروازه CI (FR-12).
+Benchmark of each model release + CI gate (FR-12).
 
-* **مجموعه مرجع منجمد داخلی** — داده سنتتیک قطعی (بذر ثابت) که بدون هیچ دانلودی در CI قابل
-  اجراست. اثرانگشت محتوای آن در نام دیتاست ثبت می‌شود؛ اگر قوانین تولید داده عوض شود، تاریخچه
-  به‌طور خودکار از نو شروع می‌شود (مقایسه با مرجع تغییرکرده بی‌معناست).
-* **دیتاست‌های عمومی** (LNP-622، LANCE) — از طریق ``load_reference_dataset`` با فایل محلی.
-* **مقالات منتشرشده** — ``published_results.json`` را خودتان با ارجاع دقیق پر کنید؛ این
-  ماژول هیچ عدد «منتشرشده‌ای» از خودش اختراع نمی‌کند.
+* **Frozen internal reference set** — deterministic synthetic data (fixed seed) that can run in CI without any
+  download. Its content fingerprint is recorded in the dataset name; if the data generation rules change, the history
+  automatically starts over (comparison with a changed reference is meaningless).
+* **Public datasets** (LNP-622, LANCE) — via ``load_reference_dataset`` with a local file.
+* **Published papers** — fill ``published_results.json`` yourself with exact citations; this
+  module never invents any "published" number of its own.
 
-دروازه ``gate`` در صورت افت دقت نسبت به نسخه قبل **یا** نقض آستانه‌های NFR، کد خروج غیرصفر
-می‌دهد (برای pipeline انتشار مدل)::
+The ``gate`` gives a non-zero exit code if accuracy drops relative to the previous version **or** NFR thresholds are violated
+(for the model release pipeline)::
 
     python -m ipind2.benchmarking.release --model-dir models/v1 --history benchmarks/history.json
 """
@@ -32,7 +32,7 @@ from .runner import BenchmarkHistory, BenchmarkResult, RegressionReport, check_r
 FROZEN_SEED = 20240601
 FROZEN_SIZE = 500
 
-# آستانه‌های NFR (SRS §2.2) برای دروازه انتشار
+# NFR thresholds (SRS §2.2) for the release gate
 NFR_GATES = {
     "phys_size_nm": ("rmse", 5.0),
     "phys_zeta_potential_mV": ("rmse", 2.0),
@@ -41,14 +41,14 @@ NFR_GATES = {
 
 
 def frozen_reference_dataset(n: int = FROZEN_SIZE, seed: int = FROZEN_SEED) -> pd.DataFrame:
-    """مجموعه مرجع قطعی (با بذر جدا از هر بذر آموزش)."""
+    """Deterministic reference set (with a seed separate from any training seed)."""
     from ..data_generation.synthetic_data_generator import SyntheticDataGenerator
 
     return SyntheticDataGenerator(seed).generate_dataset(n, include_pareto_labels=False)
 
 
 def dataset_fingerprint(frame: pd.DataFrame) -> str:
-    """اثرانگشت محتوای مرجع (SMILES + مقادیر هدف) — نام دیتاست را نسخه‌دار می‌کند."""
+    """Content fingerprint of the reference (SMILES + target values) — versions the dataset name."""
     columns = ["smiles", *PHYSICO_TARGET_COLUMNS, *BIO_TARGET_COLUMNS]
     payload = frame[columns].round(6).to_csv(index=False).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()[:8]
@@ -66,22 +66,22 @@ class ReleaseReport:
         return not self.nfr_violations and not any(r.regressed for r in self.regressions)
 
     def to_markdown(self) -> str:
-        lines = ["| دیتاست/هدف | RMSE | R² | تغییر نسبت به نسخه قبل |", "|---|---|---|---|"]
+        lines = ["| Dataset/target | RMSE | R² | Change vs. previous version |", "|---|---|---|---|"]
         for result, regression in zip(self.results, self.regressions):
             lines.append(f"| {result.dataset} | {result.rmse:.4f} | {result.r2:.4f} | {regression.message} |")
         if self.nfr_violations:
-            lines += ["", "**نقض NFR:**"] + [f"- {v}" for v in self.nfr_violations]
+            lines += ["", "**NFR violations:**"] + [f"- {v}" for v in self.nfr_violations]
         return "\n".join(lines)
 
 
 def load_published_results(path: Optional[str]) -> Dict[str, dict]:
-    """بارگذاری ``published_results.json`` (کلید = هدف، مقدار = {metric, value, citation})."""
+    """Load ``published_results.json`` (key = target, value = {metric, value, citation})."""
     if not path or not Path(path).exists():
         return {}
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     for key, entry in data.items():
         if "citation" not in entry or "value" not in entry:
-            raise ValueError(f"ورودی منتشرشده «{key}» باید value و citation داشته باشد (بدون ارجاع پذیرفته نمی‌شود)")
+            raise ValueError(f"Published entry '{key}' must have value and citation (not accepted without a citation)")
     return data
 
 
@@ -95,10 +95,10 @@ def benchmark_release(
     record: bool = True,
 ) -> ReleaseReport:
     """
-    سنجش یک نسخه مدل روی مجموعه مرجع، مقایسه با نسخه قبل و بررسی آستانه‌های NFR.
+    Measure a model version on the reference set, compare with the previous version and check the NFR thresholds.
 
-    تحمل افت: RMSE تا ``rel_rmse_tolerance`` (نسبی) بالا و R² تا ``r2_tolerance`` (مطلق) پایین
-    مجاز است — نویز آموزش تصادفی مدل‌ها را نباید «regression» شمرد.
+    Degradation tolerance: RMSE up to ``rel_rmse_tolerance`` (relative) higher and R² up to ``r2_tolerance`` (absolute) lower
+    is allowed — the random training noise of the models should not be counted as "regression".
     """
     reference = frozen_reference_dataset() if reference is None else reference
     tag = dataset_fingerprint(reference)
@@ -128,7 +128,7 @@ def benchmark_release(
             value = result.rmse if metric == "rmse" else result.r2
             ok = value < threshold if metric == "rmse" else value > threshold
             if not ok:
-                violations.append(f"{target}: {metric}={value:.4f} (آستانه {'<' if metric == 'rmse' else '>'} {threshold})")
+                violations.append(f"{target}: {metric}={value:.4f} (threshold {'<' if metric == 'rmse' else '>'} {threshold})")
 
     if record:
         for result in results:
@@ -151,7 +151,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         published_path=args.published, record=not args.no_record,
     )
     print(report.to_markdown())
-    print("\nنتیجه دروازه:", "PASS" if report.passed else "FAIL")
+    print("\nGate result:", "PASS" if report.passed else "FAIL")
     return 0 if report.passed else 1
 
 

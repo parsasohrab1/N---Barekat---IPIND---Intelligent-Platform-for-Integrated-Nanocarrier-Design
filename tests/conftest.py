@@ -1,15 +1,15 @@
-"""فیکسچرهای مشترک تست‌ها.
+"""Shared test fixtures.
 
-مدل‌های ``smoke`` یک‌بار برای کل جلسه آموزش می‌بینند (~۲۰ ثانیه). دقت آن‌ها اهمیتی ندارد؛
-هدف تست‌ها درستی *رفتار* خط لوله است. دقت واقعی در ``docs/MODEL_VALIDATION.md`` و با
-پروفایل ``standard`` گزارش می‌شود.
+``smoke`` models are trained once for the whole session (~20 seconds). Their accuracy does not matter;
+the goal of the tests is the correctness of the pipeline's *behavior*. Real accuracy is reported in ``docs/MODEL_VALIDATION.md`` and
+with the ``standard`` profile.
 """
 
 import os
 
 import pytest
 
-# کلیدهای آزمایشی فقط برای تست (هرگز در تولید استفاده نشوند)
+# Test-only keys (never to be used in production)
 os.environ.setdefault("IPIND_JWT_SECRET", "test-only-jwt-secret-0123456789abcdef0123456789")
 
 

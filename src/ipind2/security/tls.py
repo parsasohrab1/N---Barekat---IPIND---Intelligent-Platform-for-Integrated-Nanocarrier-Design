@@ -1,9 +1,9 @@
 """
-تنظیمات TLS 1.3 (SEC-03) و پشتیبان‌گیری رمزشده روزانه (SEC-06).
+TLS 1.3 settings (SEC-03) and daily encrypted backup (SEC-06).
 
-TLS در لایه سرور اعمال می‌شود: ``ssl_context`` یک ``SSLContext`` با حداقل نسخه TLS 1.3
-می‌سازد که به uvicorn/gunicorn (``--ssl-keyfile``/``--ssl-certfile``) یا یک reverse proxy
-داده می‌شود؛ ``deploy/nginx.conf`` همان حداقل نسخه را اعمال می‌کند.
+TLS is enforced at the server layer: ``ssl_context`` builds an ``SSLContext`` with a minimum version of TLS 1.3
+that is given to uvicorn/gunicorn (``--ssl-keyfile``/``--ssl-certfile``) or a reverse proxy;
+``deploy/nginx.conf`` enforces the same minimum version.
 """
 
 import shutil
@@ -18,7 +18,7 @@ from .crypto import encrypt_file
 
 
 def ssl_context(certfile: str, keyfile: str) -> ssl.SSLContext:
-    """SSLContext سروری که فقط TLS 1.3 را می‌پذیرد."""
+    """Server SSLContext that accepts only TLS 1.3."""
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_3
     context.load_cert_chain(certfile=certfile, keyfile=keyfile)
@@ -32,13 +32,13 @@ def backup_database(
     retention: int = 14,
 ) -> Path:
     """
-    پشتیبان رمزشده از پایگاه داده (SEC-06، باید روزانه از cron/scheduler اجرا شود).
+    Encrypted backup of the database (SEC-06, must run daily from cron/scheduler).
 
-    * SQLite: کپی سازگار با تراکنش (``sqlite3.Connection.backup``)؛
-    * PostgreSQL: ``pg_dump`` (باید روی PATH باشد، اتصال از متغیرهای محیطی PG*).
+    * SQLite: transaction-consistent copy (``sqlite3.Connection.backup``);
+    * PostgreSQL: ``pg_dump`` (must be on PATH, connection from PG* environment variables).
 
-    فایل خروجی با AES-256-GCM رمز می‌شود و نسخه ساده بلافاصله حذف می‌گردد؛ فقط
-    ``retention`` پشتیبان اخیر نگه داشته می‌شود.
+    The output file is encrypted with AES-256-GCM and the plain version is deleted immediately; only the
+    ``retention`` most recent backups are kept.
     """
     out_dir = Path(backup_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -48,7 +48,7 @@ def backup_database(
     if database_url.startswith("sqlite"):
         source_path = database_url.split("///", 1)[1]
         if not source_path or source_path == ":memory:":
-            raise ValueError("پشتیبان‌گیری از پایگاه داده حافظه‌ای ممکن نیست")
+            raise ValueError("Backing up an in-memory database is not possible")
         source = sqlite3.connect(source_path)
         target = sqlite3.connect(str(plain))
         try:
@@ -58,10 +58,10 @@ def backup_database(
             source.close()
     elif database_url.startswith("postgres"):
         if shutil.which("pg_dump") is None:
-            raise RuntimeError("pg_dump روی PATH نیست")
+            raise RuntimeError("pg_dump is not on PATH")
         subprocess.run(["pg_dump", "--format=custom", f"--file={plain}", database_url], check=True)
     else:
-        raise ValueError(f"نوع پایگاه داده پشتیبانی نمی‌شود: {database_url.split(':', 1)[0]}")
+        raise ValueError(f"Database type not supported: {database_url.split(':', 1)[0]}")
 
     encrypted = out_dir / (plain.name + ".enc")
     try:

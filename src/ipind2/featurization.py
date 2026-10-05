@@ -1,15 +1,15 @@
 """
-ویژگی‌سازی مشترک مولکول‌ها (Molecular Featurization)
+Shared molecular featurization
 
-این ماژول تنها نقطه تبدیل «SMILES» به نمایش‌های عددی مورد استفاده واحدهای ۱ تا ۶ است:
+This module is the only point of conversion from "SMILES" to the numerical representations used by Units 1 to 6:
 
-* ``descriptor_vector`` — بردار ۹ توصیف‌گر RDKit (ویژگی‌های global مولکول)
-* ``smiles_to_graph`` — گراف اتم/پیوند برای GNN چندوظیفه‌ای (واحد ۲)
-* ``atom_token_ids`` — دنباله توکن اتمی برای Transformer (واحد ۳)
-* ``generic_framework`` / ``murcko_scaffold`` — شناسه اسکلت مولکولی برای سنجش تنوع (واحد ۱)
+* ``descriptor_vector`` — 9-descriptor RDKit vector (global molecule features)
+* ``smiles_to_graph`` — atom/bond graph for the multi-task GNN (Unit 2)
+* ``atom_token_ids`` — atom token sequence for the Transformer (Unit 3)
+* ``generic_framework`` / ``murcko_scaffold`` — molecular scaffold identifier for measuring diversity (Unit 1)
 
-همه توابع در برابر SMILES نامعتبر امن‌اند (``None`` یا استثنای صریح برمی‌گردانند) چون
-ورودی آن‌ها خروجی یک مدل مولد است و نه داده دست‌چین‌شده.
+All functions are safe against invalid SMILES (they return ``None`` or an explicit exception) because
+their input is the output of a generative model and not hand-curated data.
 
 See docs/SRS.md §4.1 (FR-01), §4.2 (FR-02), §4.3 (FR-03).
 """
@@ -22,8 +22,8 @@ from rdkit import Chem, RDLogger
 from rdkit.Chem import Descriptors, Lipinski
 from rdkit.Chem.Scaffolds import MurckoScaffold
 
-# RDKit برای هر SMILES نامعتبر به stderr لاگ می‌دهد؛ در تولید انبوه (۱۰۰k ساختار)
-# این لاگ‌ها خروجی را غیرقابل‌استفاده می‌کنند.
+# RDKit logs to stderr for every invalid SMILES; in bulk generation (100k structures)
+# these logs make the output unusable.
 RDLogger.DisableLog("rdApp.*")
 
 DESCRIPTOR_NAMES: Tuple[str, ...] = (
@@ -39,15 +39,15 @@ DESCRIPTOR_NAMES: Tuple[str, ...] = (
 )
 DESCRIPTOR_DIM = len(DESCRIPTOR_NAMES)
 
-# انواع اتم پوشش‌داده‌شده: اسکلت‌های لیپیدی/پلیمری (C,N,O,P,S) و فلزی (Si,Fe,Au,...)
+# Covered atom types: lipid/polymer scaffolds (C,N,O,P,S) and metal (Si,Fe,Au,...)
 ATOM_TYPES: Tuple[str, ...] = (
     "C", "N", "O", "S", "P", "F", "Cl", "Br", "I", "Si", "Fe", "Au", "Zn", "Mn", "Gd",
 )
 _ATOM_TYPE_INDEX = {symbol: i for i, symbol in enumerate(ATOM_TYPES)}
-# one-hot نوع اتم (+۱ برای «سایر») به‌علاوه ۶ ویژگی عددی
+# one-hot atom type (+1 for "other") plus 6 numeric features
 NODE_FEATURE_DIM = len(ATOM_TYPES) + 1 + 6
 
-# واژگان توکن برای Transformer واحد ۳: ۰=padding، ۱=unknown
+# Token vocabulary for Unit 3 Transformer: 0=padding, 1=unknown
 TOKEN_PAD = 0
 TOKEN_UNK = 1
 _TOKEN_OFFSET = 2
@@ -55,36 +55,36 @@ TOKEN_VOCAB_SIZE = len(ATOM_TYPES) + _TOKEN_OFFSET
 
 
 def parse_smiles(smiles: str) -> Optional[Chem.Mol]:
-    """تبدیل SMILES به مولکول RDKit؛ ``None`` اگر نامعتبر باشد."""
+    """Convert SMILES to an RDKit molecule; ``None`` if invalid."""
     if not smiles:
         return None
     return Chem.MolFromSmiles(smiles)
 
 
 def is_valid_smiles(smiles: str) -> bool:
-    """اعتبارسنجی ساختار با RDKit — معیار «نرخ ساختارهای معتبر > ۹۵٪» در FR-01."""
+    """Validate a structure with RDKit — the "valid structure rate > 95%" criterion in FR-01."""
     return parse_smiles(smiles) is not None
 
 
 def canonical_smiles(smiles: str) -> Optional[str]:
-    """SMILES کانونیک (برای مقایسه و حذف تکراری)."""
+    """Canonical SMILES (for comparison and deduplication)."""
     mol = parse_smiles(smiles)
     return Chem.MolToSmiles(mol) if mol is not None else None
 
 
 def inchikey(smiles: str) -> Optional[str]:
-    """InChIKey برای حذف تکراری مستقل از نحو SMILES."""
+    """InChIKey for deduplication independent of SMILES syntax."""
     mol = parse_smiles(smiles)
     if mol is None:
         return None
     try:
         return Chem.MolToInchiKey(mol)
-    except Exception:  # pragma: no cover - وابسته به بیلد RDKit
+    except Exception:  # pragma: no cover - depends on the RDKit build
         return Chem.MolToSmiles(mol)
 
 
 def murcko_scaffold(smiles: str) -> Optional[str]:
-    """اسکلت Murcko (حلقه‌ها + لینکرها). برای مولکول‌های بدون حلقه رشته خالی است."""
+    """Murcko scaffold (rings + linkers). Empty string for molecules without rings."""
     mol = parse_smiles(smiles)
     if mol is None:
         return None
@@ -93,12 +93,12 @@ def murcko_scaffold(smiles: str) -> Optional[str]:
 
 def generic_framework(smiles: str) -> Optional[str]:
     """
-    شناسه «اسکلت مولکولی» مستقل از نوع اتم و مرتبه پیوند.
+    "Molecular scaffold" identifier independent of atom type and bond order.
 
-    اسکلت Murcko برای نانوحامل‌های لیپیدی/پلیمری (که اغلب آسیکلیک‌اند) رشته خالی
-    برمی‌گرداند و برای سنجش تنوع ساختاری FR-01 («پوشش ≥۵۰۰ اسکلت متفاوت») بی‌اثر است.
-    این تابع در عوض توپولوژی اسکلت را نگه می‌دارد: همه اتم‌ها به کربن و همه پیوندها به
-    پیوند یگانه تبدیل می‌شوند، سپس SMILES کانونیک گرفته می‌شود.
+    The Murcko scaffold returns an empty string for lipid/polymer nanocarriers (which are mostly acyclic)
+    and is ineffective for measuring FR-01 structural diversity ("coverage of ≥500 distinct scaffolds").
+    This function instead keeps the scaffold topology: all atoms are converted to carbon and all bonds to
+    single bonds, then the canonical SMILES is taken.
     """
     mol = parse_smiles(smiles)
     if mol is None:
@@ -122,7 +122,7 @@ def generic_framework(smiles: str) -> Optional[str]:
 
 
 def descriptor_dict(mol: Chem.Mol) -> Dict[str, float]:
-    """توصیف‌گرهای مولکولی RDKit مطابق ستون‌های ``desc_*`` در docs/SRS.md §۸."""
+    """RDKit molecular descriptors matching the ``desc_*`` columns in docs/SRS.md §8."""
     return {
         "mol_weight": float(Descriptors.MolWt(mol)),
         "logP": float(Descriptors.MolLogP(mol)),
@@ -136,8 +136,8 @@ def descriptor_dict(mol: Chem.Mol) -> Dict[str, float]:
     }
 
 
-# گروه‌های عاملی مؤثر بر بار سطحی، سمیت و پایداری؛ منبع سیگنال ساختار-خاصیت
-# (توصیف‌گرهای عمومی RDKit بار یونی/نوع پیوند را نمی‌بینند).
+# Functional groups affecting surface charge, toxicity and stability; the source of structure-property
+# signal (generic RDKit descriptors do not see ionic charge/bond type).
 _GROUP_SMARTS: Dict[str, str] = {
     "n_quat_ammonium": "[NX4+]",
     "n_amine": "[NX3;!$(N-C=O);!$(N=*);!$(N-[a]);!$(N-S);!$(N-P)]",
@@ -157,7 +157,7 @@ EXTENDED_DIM = len(EXTENDED_NAMES)
 
 
 def group_counts(mol: Chem.Mol) -> Dict[str, float]:
-    """شمار هر گروه عاملی در مولکول."""
+    """Count of each functional group in the molecule."""
     return {
         name: float(len(mol.GetSubstructMatches(pattern)))
         for name, pattern in _GROUP_PATTERNS.items()
@@ -165,14 +165,14 @@ def group_counts(mol: Chem.Mol) -> Dict[str, float]:
 
 
 def extended_dict(mol: Chem.Mol) -> Dict[str, float]:
-    """توصیف‌گرهای RDKit + شمار گروه‌های عاملی."""
+    """RDKit descriptors + functional group counts."""
     values = descriptor_dict(mol)
     values.update(group_counts(mol))
     return values
 
 
 def extended_vector(smiles_or_mol) -> Optional[np.ndarray]:
-    """بردار ویژگی global (توصیف‌گر + گروه عاملی) به ترتیب ``EXTENDED_NAMES``."""
+    """Global feature vector (descriptors + functional groups) in the order of ``EXTENDED_NAMES``."""
     mol = smiles_or_mol if isinstance(smiles_or_mol, Chem.Mol) else parse_smiles(smiles_or_mol)
     if mol is None:
         return None
@@ -181,7 +181,7 @@ def extended_vector(smiles_or_mol) -> Optional[np.ndarray]:
 
 
 def extended_matrix(smiles_list: Sequence[str]) -> Tuple[np.ndarray, List[int]]:
-    """ماتریس ویژگی گسترده؛ مانند ``descriptor_matrix`` اما با گروه‌های عاملی."""
+    """Extended feature matrix; like ``descriptor_matrix`` but with functional groups."""
     rows: List[np.ndarray] = []
     kept: List[int] = []
     for i, smiles in enumerate(smiles_list):
@@ -195,7 +195,7 @@ def extended_matrix(smiles_list: Sequence[str]) -> Tuple[np.ndarray, List[int]]:
 
 
 def descriptor_vector(smiles_or_mol) -> Optional[np.ndarray]:
-    """بردار توصیف‌گر به ترتیب ``DESCRIPTOR_NAMES``؛ ``None`` برای ورودی نامعتبر."""
+    """Descriptor vector in the order of ``DESCRIPTOR_NAMES``; ``None`` for invalid input."""
     mol = smiles_or_mol if isinstance(smiles_or_mol, Chem.Mol) else parse_smiles(smiles_or_mol)
     if mol is None:
         return None
@@ -205,10 +205,10 @@ def descriptor_vector(smiles_or_mol) -> Optional[np.ndarray]:
 
 def descriptor_matrix(smiles_list: Sequence[str]) -> Tuple[np.ndarray, List[int]]:
     """
-    ماتریس توصیف‌گر برای فهرستی از SMILES.
+    Descriptor matrix for a list of SMILES.
 
     Returns:
-        (ماتریس به شکل (n_valid, DESCRIPTOR_DIM)، اندیس نمونه‌های معتبر در ورودی)
+        (matrix of shape (n_valid, DESCRIPTOR_DIM), indices of valid samples in the input)
     """
     rows: List[np.ndarray] = []
     kept: List[int] = []
@@ -238,20 +238,20 @@ def _atom_features(atom: Chem.Atom) -> List[float]:
 
 @dataclass
 class MolGraph:
-    """گراف مولکولی متراکم (dense) — بدون نیاز به torch-geometric."""
+    """Dense molecular graph — no torch-geometric required."""
 
     node_features: np.ndarray  # (n_atoms, NODE_FEATURE_DIM)
-    adjacency: np.ndarray  # (n_atoms, n_atoms) متقارن، با self-loop
+    adjacency: np.ndarray  # (n_atoms, n_atoms) symmetric, with self-loop
     n_atoms: int
     smiles: str = ""
 
 
 def smiles_to_graph(smiles: str, max_atoms: int = 128) -> Optional[MolGraph]:
     """
-    تبدیل SMILES به گراف متراکم برای MPNN واحد ۲.
+    Convert SMILES to a dense graph for the Unit 2 MPNN.
 
-    مولکول‌های بزرگ‌تر از ``max_atoms`` به ``max_atoms`` اتم اول برش می‌خورند (پلیمرها
-    می‌توانند صدها اتم داشته باشند و برای مدل اندازه ثابت لازم است).
+    Molecules larger than ``max_atoms`` are truncated to the first ``max_atoms`` atoms (polymers
+    can have hundreds of atoms and the model needs a fixed size).
     """
     mol = parse_smiles(smiles)
     if mol is None or mol.GetNumAtoms() == 0:
@@ -275,13 +275,13 @@ def smiles_to_graph(smiles: str, max_atoms: int = 128) -> Optional[MolGraph]:
 
 def batch_graphs(graphs: Sequence[MolGraph]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    دسته‌بندی (padding) چند گراف با اندازه متفاوت.
+    Padding of several graphs of different sizes.
 
     Returns:
-        (nodes (B, N, F)، adjacency (B, N, N)، mask (B, N) که ۱=اتم واقعی)
+        (nodes (B, N, F), adjacency (B, N, N), mask (B, N) where 1=real atom)
     """
     if not graphs:
-        raise ValueError("batch_graphs به حداقل یک گراف نیاز دارد")
+        raise ValueError("batch_graphs requires at least one graph")
     batch = len(graphs)
     n_max = max(g.n_atoms for g in graphs)
     nodes = np.zeros((batch, n_max, NODE_FEATURE_DIM), dtype=np.float32)
@@ -296,7 +296,7 @@ def batch_graphs(graphs: Sequence[MolGraph]) -> Tuple[np.ndarray, np.ndarray, np
 
 
 def atom_token_ids(smiles: str, max_len: int = 128) -> Optional[np.ndarray]:
-    """دنباله توکن اتمی (با padding) برای Transformer واحد ۳."""
+    """Atom token sequence (with padding) for the Unit 3 Transformer."""
     mol = parse_smiles(smiles)
     if mol is None:
         return None
@@ -310,12 +310,12 @@ def atom_token_ids(smiles: str, max_len: int = 128) -> Optional[np.ndarray]:
 
 
 def count_distinct_skeletons(smiles_list: Sequence[str]) -> int:
-    """تعداد اسکلت‌های مولکولی متمایز — سنجه «تنوع ساختاری» در FR-01."""
+    """Number of distinct molecular scaffolds — the "structural diversity" measure in FR-01."""
     return len({f for f in (generic_framework(s) for s in smiles_list) if f})
 
 
 def validity_rate(smiles_list: Sequence[str]) -> float:
-    """نسبت ساختارهای معتبر RDKit — سنجه «نرخ ساختارهای معتبر > ۹۵٪» در FR-01."""
+    """Ratio of RDKit-valid structures — the "valid structure rate > 95%" measure in FR-01."""
     if not smiles_list:
         return 0.0
     return sum(1 for s in smiles_list if is_valid_smiles(s)) / len(smiles_list)

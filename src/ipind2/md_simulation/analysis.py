@@ -1,11 +1,11 @@
 """
-تحلیل مسیر (trajectory) برای خواص FR-05: شعاع ژیراسیون، SASA، پارامتر ترازوی سفارش و MM-GBSA.
+Trajectory analysis for FR-05 properties: radius of gyration, SASA, order parameter and MM-GBSA.
 
-همه توابع روی آرایه‌های numpy خالص کار می‌کنند (بدون وابستگی به موتور شبیه‌سازی) تا
-بتوان آن‌ها را روی خروجی هر موتور (GROMACS/OpenMM/مجموعه کانفورمر) و با تست تحلیلی
-(مثلاً SASA یک کره منفرد) اعتبارسنجی کرد.
+All functions work on pure numpy arrays (no dependence on a simulation engine) so
+they can be validated on the output of any engine (GROMACS/OpenMM/conformer set) and with analytical tests
+(e.g., the SASA of a single sphere).
 
-مختصات: آرایه (n_frames, n_atoms, 3) بر حسب آنگستروم.
+Coordinates: array (n_frames, n_atoms, 3) in angstroms.
 """
 
 from typing import Optional, Sequence
@@ -15,11 +15,11 @@ import numpy as np
 
 def radius_of_gyration(coords: np.ndarray, masses: Optional[Sequence[float]] = None) -> np.ndarray:
     """
-    شعاع ژیراسیون هر فریم (Å): ``sqrt(Σ m_i |r_i - r_cm|² / Σ m_i)``.
+    Radius of gyration of each frame (Å): ``sqrt(Σ m_i |r_i - r_cm|² / Σ m_i)``.
 
     Args:
-        coords: (T, N, 3) یا (N, 3).
-        masses: جرم هر اتم؛ ``None`` یعنی جرم یکسان.
+        coords: (T, N, 3) or (N, 3).
+        masses: mass of each atom; ``None`` means equal mass.
     """
     coords = np.asarray(coords, dtype=float)
     single = coords.ndim == 2
@@ -28,7 +28,7 @@ def radius_of_gyration(coords: np.ndarray, masses: Optional[Sequence[float]] = N
     n_atoms = coords.shape[1]
     weights = np.ones(n_atoms) if masses is None else np.asarray(masses, dtype=float)
     if weights.shape != (n_atoms,):
-        raise ValueError("طول masses باید برابر تعداد اتم‌ها باشد")
+        raise ValueError("Length of masses must equal the number of atoms")
     total = weights.sum()
     center = (coords * weights[None, :, None]).sum(axis=1) / total
     squared = ((coords - center[:, None, :]) ** 2).sum(axis=2)
@@ -37,7 +37,7 @@ def radius_of_gyration(coords: np.ndarray, masses: Optional[Sequence[float]] = N
 
 
 def _fibonacci_sphere(n_points: int) -> np.ndarray:
-    """نقاط تقریباً یکنواخت روی کره واحد (برای Shrake-Rupley)."""
+    """Approximately uniform points on the unit sphere (for Shrake-Rupley)."""
     indices = np.arange(n_points) + 0.5
     phi = np.arccos(1 - 2 * indices / n_points)
     theta = np.pi * (1 + 5**0.5) * indices
@@ -51,18 +51,18 @@ def sasa_shrake_rupley(
     n_points: int = 480,
 ) -> float:
     """
-    سطح قابل‌دسترس حلال (Å²) یک فریم به روش Shrake–Rupley.
+    Solvent-accessible surface area (Å²) of one frame using the Shrake–Rupley method.
 
     Args:
         coords: (N, 3).
-        radii: شعاع vdW هر اتم (Å).
-        probe_radius: شعاع پروب آب (۱٫۴ Å).
+        radii: vdW radius of each atom (Å).
+        probe_radius: water probe radius (1.4 Å).
     """
     coords = np.asarray(coords, dtype=float)
     radii = np.asarray(radii, dtype=float) + probe_radius
     n_atoms = coords.shape[0]
     if radii.shape != (n_atoms,):
-        raise ValueError("طول radii باید برابر تعداد اتم‌ها باشد")
+        raise ValueError("Length of radii must equal the number of atoms")
 
     unit = _fibonacci_sphere(n_points)
     total = 0.0
@@ -79,7 +79,7 @@ def sasa_shrake_rupley(
 def sasa_trajectory(
     coords: np.ndarray, radii: Sequence[float], probe_radius: float = 1.4, n_points: int = 240
 ) -> np.ndarray:
-    """SASA هر فریم (Å²)."""
+    """SASA of each frame (Å²)."""
     coords = np.asarray(coords, dtype=float)
     if coords.ndim == 2:
         coords = coords[None]
@@ -88,16 +88,16 @@ def sasa_trajectory(
 
 def order_parameter_p2(bond_vectors: np.ndarray, director: Optional[np.ndarray] = None) -> float:
     """
-    پارامتر ترازوی سفارش ``S = <(3cos²θ − 1)/2>`` (−۰٫۵ تا ۱).
+    Order parameter ``S = <(3cos²θ − 1)/2>`` (−0.5 to 1).
 
     Args:
-        bond_vectors: (M, 3) بردارهای پیوند (مثلاً C–C دم‌های آلکیلی) از همه فریم‌ها.
-        director: محور مرجع؛ ``None`` یعنی محور اصلی (بزرگ‌ترین مقدار ویژه تانسور Q)
-            تا ``S`` مستقل از جهت‌گیری کلی نمونه محاسبه شود.
+        bond_vectors: (M, 3) bond vectors (e.g., C–C of alkyl tails) from all frames.
+        director: reference axis; ``None`` means the principal axis (largest eigenvalue of the Q tensor)
+            so that ``S`` is computed independent of the overall sample orientation.
     """
     vectors = np.asarray(bond_vectors, dtype=float)
     if vectors.ndim != 2 or vectors.shape[1] != 3 or len(vectors) == 0:
-        raise ValueError("bond_vectors باید آرایه (M, 3) غیرخالی باشد")
+        raise ValueError("bond_vectors must be a non-empty (M, 3) array")
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
     unit = vectors / np.where(norms == 0, 1.0, norms)
 
@@ -118,16 +118,16 @@ def mmgbsa_delta_g(
     entropy_term: float = 0.0,
 ) -> float:
     """
-    انرژی آزاد اتصال MM-GBSA: ``ΔG = G_complex − G_receptor − G_ligand − TΔS`` (kcal/mol).
+    MM-GBSA binding free energy: ``ΔG = G_complex − G_receptor − G_ligand − TΔS`` (kcal/mol).
 
-    ورودی‌ها میانگین‌های ``E_MM + G_solv`` از مسیر شبیه‌سازی (خروجی موتور MD) هستند؛ این
-    تابع فقط آریتمتیک نهایی را انجام می‌دهد. ``entropy_term`` همان ``−TΔS`` است.
+    The inputs are averages of ``E_MM + G_solv`` from the simulation trajectory (MD engine output); this
+    function only performs the final arithmetic. ``entropy_term`` is the same ``−TΔS``.
     """
     return float(complex_energy - receptor_energy - ligand_energy + entropy_term)
 
 
 def block_average_error(series: Sequence[float], n_blocks: int = 5) -> float:
-    """خطای استاندارد میانگین با روش block averaging (برای گزارش عدم‌قطعیت MM-GBSA)."""
+    """Standard error of the mean using block averaging (for reporting MM-GBSA uncertainty)."""
     values = np.asarray(series, dtype=float)
     if len(values) < n_blocks * 2:
         n_blocks = max(len(values) // 2, 1)

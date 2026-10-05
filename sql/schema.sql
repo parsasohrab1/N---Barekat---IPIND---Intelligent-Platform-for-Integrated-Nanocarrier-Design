@@ -5,7 +5,7 @@
 CREATE TABLE molecules (
     id SERIAL PRIMARY KEY,
     smiles TEXT NOT NULL,
-    canonical_smiles VARCHAR(2048) UNIQUE, -- کلید حذف تکراری (RDKit)
+    canonical_smiles VARCHAR(2048) UNIQUE, -- deduplication key (RDKit)
     inchikey VARCHAR(27),
     molecular_weight FLOAT,
     logP FLOAT,
@@ -55,7 +55,7 @@ CREATE TABLE experimental_results (
     experimental_cytotoxicity FLOAT,
     experimental_date DATE,
     lab_technician VARCHAR(100),
-    consumed_by_training BOOLEAN DEFAULT FALSE -- مصرف‌شده در دور یادگیری فعال
+    consumed_by_training BOOLEAN DEFAULT FALSE -- consumed in an active-learning round
 );
 
 CREATE INDEX idx_molecules_inchikey ON molecules (inchikey);
@@ -64,7 +64,7 @@ CREATE INDEX idx_physico_molecule ON physicochemical_properties (molecule_id);
 CREATE INDEX idx_bio_molecule ON biological_properties (molecule_id);
 CREATE INDEX idx_exp_molecule ON experimental_results (molecule_id);
 
--- کاربران و امنیت (SEC-01, SEC-05)
+-- Users and security (SEC-01, SEC-05)
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(64) NOT NULL UNIQUE,
@@ -78,7 +78,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- لاگ فعالیت کاربران (SEC-04)
+-- User activity log (SEC-04)
 CREATE TABLE audit_log (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMP DEFAULT NOW(),
@@ -93,7 +93,7 @@ CREATE INDEX idx_audit_ts ON audit_log (timestamp);
 CREATE INDEX idx_audit_user ON audit_log (username);
 CREATE INDEX idx_audit_action ON audit_log (action);
 
--- کارهای ناهمگام طراحی
+-- Asynchronous design jobs
 CREATE TABLE jobs (
     id VARCHAR(36) PRIMARY KEY,
     kind VARCHAR(32) NOT NULL,
@@ -107,7 +107,7 @@ CREATE TABLE jobs (
 );
 CREATE INDEX idx_jobs_status ON jobs (status);
 
--- رجیستری نسخه مدل و بنچمارک (FR-12)
+-- Model version registry and benchmark (FR-12)
 CREATE TABLE model_versions (
     id SERIAL PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
