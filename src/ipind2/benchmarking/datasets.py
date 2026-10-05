@@ -39,6 +39,12 @@ REGISTRY: Dict[str, ReferenceDataset] = {
         source_url="https://www.nature.com/articles/s41565-025-01975-4",
         target_column="efficacy",
     ),
+    "lantern-hela": ReferenceDataset(
+        name="lantern-hela",
+        description="۱۱۰۰ لیپید یونیزه‌شونده با کارایی ترانسفکشن تجربی HeLa (LANTERN/AGILE، data/AGILE.csv، مجوز MIT).",
+        source_url="https://github.com/AsalMehradfar/LANTERN",
+        target_column="Target",
+    ),
 }
 
 

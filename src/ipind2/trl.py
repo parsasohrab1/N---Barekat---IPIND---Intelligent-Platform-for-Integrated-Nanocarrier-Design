@@ -21,7 +21,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-PUBLIC_DATASET_TAGS = ("lnp-622", "lance")  # کلیدهای REGISTRY دیتاست‌های عمومی (benchmarking.datasets)
 MIN_REAL_LAB_RESULTS = 10  # حداقل یک دور fine-tuning طبق SRS §4.6
 
 
@@ -72,6 +71,7 @@ def assess(
     report_path: Optional[str] = None,
     history_path: Optional[str] = None,
     attestations_path: Optional[str] = None,
+    public_benchmark_path: Optional[str] = None,
     real_lab_results: int = 0,
     real_lab_improved_holdout: bool = False,
     test_suite_passed: Optional[bool] = None,
@@ -80,6 +80,7 @@ def assess(
     Args:
         report_path: خروجی ``ipind2.training.validate``.
         history_path: تاریخچه بنچمارک (``BenchmarkHistory``).
+        public_benchmark_path: خروجی ``ipind2.benchmarking.public`` (دیتاست عمومی واقعی).
         attestations_path: تأیید دستی امضاشده معیارهای غیرخودکار.
         real_lab_results: تعداد نتایج **آزمایشگاهی واقعی** (نه سنتتیک) ثبت‌شده در پایگاه داده.
         real_lab_improved_holdout: آیا یک دور به‌روزرسانی روی holdout واقعی خطا را کم کرد.
@@ -112,9 +113,17 @@ def assess(
     # --- TRL 5: یکپارچگی در محیط مرتبط -----------------------------------------
     add("R1", 5, "دروازه بنچمارک مرجع منجمد PASS (بدون افت و NFR برقرار)", "auto", gate.get("passed") is True,
         "benchmark_gate.passed" if gate else "دروازه اجرا نشده")
-    public = sorted({row["dataset"].split("@")[0] for row in history} & set(PUBLIC_DATASET_TAGS))
-    add("R2", 5, "بنچمارک روی دیتاست عمومی واقعی (LNP-622 یا LANCE) ثبت شده", "auto", bool(public),
-        f"دیتاست‌های ثبت‌شده: {public}" if public else "هیچ اجرای دیتاست عمومی در تاریخچه نیست")
+    pub = _load(public_benchmark_path)
+    if pub:
+        summary = pub.get("summary", {})
+        gnn = summary.get("ipind2-gnn", {}).get("r2_mean")
+        forest = summary.get("random-forest (Morgan)", {}).get("r2_mean")
+        ok = gnn is not None and forest is not None and gnn >= forest
+        evidence = (f"{pub.get('dataset')}: R² پلتفرم {gnn:.3f} در برابر خط پایه RandomForest+Morgan {forest:.3f}"
+                    if gnn is not None and forest is not None else "گزارش ناقص")
+    else:
+        ok, evidence = False, "گزارش بنچمارک عمومی (public_benchmark.json) موجود نیست"
+    add("R2", 5, "روی دیتاست عمومی واقعی، R² پلتفرم ≥ خط پایه ساده (RandomForest+Morgan)", "auto", ok, evidence)
     md_real = bool(report.get("md_real_validation", {}).get("complete"))
     add("R3", 5, "اعتبارسنجی MD واقعی (≥۱۰۰ ns، موتور MD) برای کاندیداها", "auto", md_real,
         "md_real_validation.complete" if md_real else "فقط نمونه‌برداری کانفورمری؛ موتور MD اجرا نشده")
@@ -151,12 +160,13 @@ def main() -> int:
     parser.add_argument("--report", default="docs/validation_report.json")
     parser.add_argument("--history", default="benchmarks/history.json")
     parser.add_argument("--attestations", default="docs/trl_attestations.json")
+    parser.add_argument("--public-benchmark", default="docs/public_benchmark.json")
     parser.add_argument("--tests-passed", choices=["yes", "no"], default=None)
     parser.add_argument("--real-lab-results", type=int, default=0)
     parser.add_argument("--real-lab-improved", action="store_true")
     args = parser.parse_args()
     result = assess(
-        args.report, args.history, args.attestations, args.real_lab_results, args.real_lab_improved,
+        args.report, args.history, args.attestations, args.public_benchmark, args.real_lab_results, args.real_lab_improved,
         None if args.tests_passed is None else args.tests_passed == "yes",
     )
     print(result.to_markdown())

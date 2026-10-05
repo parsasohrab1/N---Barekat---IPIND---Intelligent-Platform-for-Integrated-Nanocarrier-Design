@@ -48,12 +48,30 @@ def test_attestation_requires_signature_date_and_evidence(tmp_path):
     assert {"R5", "R6"} <= {c.id for c in result.missing_for(5)}
 
 
+def _bench(tmp_path, gnn, forest):
+    return _write(tmp_path, "pb.json", {"dataset": "lantern-hela", "summary": {
+        "ipind2-gnn": {"r2_mean": gnn}, "random-forest (Morgan)": {"r2_mean": forest}}})
+
+
+def test_weak_real_data_performance_does_not_satisfy_r2(tmp_path):
+    """GNN پلتفرم روی داده واقعی از خط پایه ساده ضعیف‌تر است ⇒ R2 برقرار نیست."""
+    result = assess(_write(tmp_path, "r.json", GOOD_REPORT), None, public_benchmark_path=_bench(tmp_path, 0.30, 0.48), test_suite_passed=True)
+    r2 = next(c for c in result.criteria if c.id == "R2")
+    assert not r2.met and "0.300" in r2.evidence and "0.480" in r2.evidence
+
+
+def test_strong_real_data_performance_satisfies_r2(tmp_path):
+    result = assess(_write(tmp_path, "r.json", GOOD_REPORT), None, public_benchmark_path=_bench(tmp_path, 0.55, 0.48), test_suite_passed=True)
+    assert next(c for c in result.criteria if c.id == "R2").met
+
+
 def test_all_real_evidence_reaches_trl5(tmp_path):
     report = dict(GOOD_REPORT, md_real_validation={"complete": True})
     history = SYNTHETIC_HISTORY + [{"dataset": "lnp-622"}]
     signed = {"signed_by": "Dr. A", "date": "2026-10-01", "evidence": "report-123"}
     result = assess(_write(tmp_path, "r.json", report), _write(tmp_path, "h.json", history),
                     _write(tmp_path, "a.json", {"staging_deployment": signed, "security_review": signed}),
+                    public_benchmark_path=_bench(tmp_path, 0.6, 0.48),
                     real_lab_results=12, real_lab_improved_holdout=True, test_suite_passed=True)
     assert result.achieved_level == 5 and result.target_met and not result.missing_for(5)
 
