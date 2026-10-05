@@ -1,17 +1,17 @@
-# سند الزامات نرم‌افزاری (SRS)
-## پلتفرم یکپارچه طراحی هوشمند نانوحامل‌های دارویی (IPIND² - Intelligent Platform for Integrated Nanocarrier Design)
+# Software Requirements Specification (SRS)
+## Integrated Platform for Intelligent Design of Drug Nanocarriers (IPIND² - Intelligent Platform for Integrated Nanocarrier Design)
 
-## ۱. مقدمه
+## 1. Introduction
 
-### ۱.۱ هدف
-این سند، الزامات کامل نرم‌افزاری برای «پلتفرم یکپارچه طراحی هوشمند نانوحامل‌های دارویی» را مشخص می‌کند. پلتفرم با استفاده از ترکیب مدل‌های مولد عمیق، شبکه‌های عصبی گرافی، یادگیری تقویتی چندهدفه و شبیه‌سازی دینامیک مولکولی، فرآیند طراحی نانوحامل‌ها را از ۳-۵ سال به ۶-۱۲ ماه کاهش می‌دهد.
+### 1.1 Purpose
+This document specifies the complete software requirements for the "Integrated Platform for Intelligent Design of Drug Nanocarriers". By combining deep generative models, graph neural networks, multi-objective reinforcement learning and molecular dynamics simulation, the platform reduces the nanocarrier design process from 3-5 years to 6-12 months.
 
-### ۱.۲ دامنه
-پلتفرم از تولید کتابخانه مجازی ساختارها تا پیش‌بینی ویژگی‌ها، بهینه‌سازی چندهدفه، اعتبارسنجی شبیه‌سازی، و یادگیری فعال با بازخورد آزمایشگاهی را پوشش می‌دهد.
+### 1.2 Scope
+The platform covers everything from generating a virtual structure library to property prediction, multi-objective optimization, simulation validation, and active learning with lab feedback.
 
-### ۱.۳ تعاریف و اختصارات
+### 1.3 Definitions and Acronyms
 
-| اختصار | توضیح |
+| Abbreviation | Description |
 |---|---|
 | VAE | Variational Autoencoder |
 | GAN | Generative Adversarial Network |
@@ -22,270 +22,270 @@
 | PLGA | Poly(Lactic-co-Glycolic Acid) |
 | SMILES | Simplified Molecular Input Line Entry System |
 
-## ۲. الزامات کلی سیستم
+## 2. General System Requirements
 
-### ۲.۱ الزامات عملکردی (Functional Requirements)
+### 2.1 Functional Requirements
 
-| شناسه | الزام | اولویت | توضیح |
+| ID | Requirement | Priority | Description |
 |---|---|---|---|
-| FR-01 | تولید کتابخانه مجازی | بالا | تولید حداقل ۱۰۰,۰۰۰ ساختار نانوحامل در هر اجرا با استفاده از VAE/GAN شرطی |
-| FR-02 | پیش‌بینی ویژگی‌های فیزیکوشیمیایی | بالا | پیش‌بینی همزمان حداقل ۷ ویژگی با GNN چندوظیفه‌ای |
-| FR-03 | پیش‌بینی ویژگی‌های زیستی | بالا | پیش‌بینی کارایی بارگذاری، سینتیک رهایش، سمیت، نفوذ سلولی |
-| FR-04 | بهینه‌سازی چندهدفه | بالا | بهینه‌سازی همزمان اهداف متضاد با Pareto-Guided RL |
-| FR-05 | شبیه‌سازی و اعتبارسنجی | متوسط | شبیه‌سازی MD برای تأیید نهایی کاندیداها |
-| FR-06 | یادگیری فعال و بازخورد | بالا | به‌روزرسانی مداوم مدل‌ها با داده‌های آزمایشگاهی |
-| FR-07 | رابط کاربری | متوسط | داشبورد تعاملی برای ورود داده و نمایش نتایج |
-| FR-08 | مدیریت داده | بالا | پایگاه داده یکپارچه برای ذخیره‌سازی ساختارها، ویژگی‌ها و نتایج |
-| FR-09 | تفسیرپذیری پیش‌بینی‌ها | بالا | لایه‌های Attention + تحلیل SHAP/LIME برای هر پیش‌بینی؛ نمره اطمینان و توضیح قابل‌فهم برای هر ویژگی خروجی |
-| FR-10 | رابط پرس‌وجوی زبان طبیعی | متوسط | تعریف پارامترهای هدف با زبان طبیعی/ساختاریافته، مکمل داشبورد فرم‌محور |
-| FR-11 | یکپارچگی با آزمایشگاه خودکار (Lab-in-the-loop) | متوسط | API برای اتصال به تجهیزات رباتیک سنتز/غربالگری با توان بالا، برای تبدیل حلقه بازخورد از ورود دستی داده به بازخورد خودکار در حلقه بسته |
-| FR-12 | بنچمارک داخلی مستمر | بالا | سنجش خودکار دقت مدل‌ها در برابر دیتاست‌های عمومی مرجع (مثل مجموعه ۶۲۲ LNP، LANCE) در هر انتشار مدل، برای جلوگیری از افت کیفیت پنهان |
-| FR-13 | استانداردسازی و تعامل‌پذیری داده | متوسط | ورودی/خروجی داده مطابق اصول FAIR و استاندارد در حال ظهور MIRIBEL برای نانوذرات، جهت تعامل با شرکا و نهادهای تنظیم‌گر |
+| FR-01 | Virtual library generation | High | Generate at least 100,000 nanocarrier structures per run using conditional VAE/GAN |
+| FR-02 | Physicochemical property prediction | High | Simultaneous prediction of at least 7 properties with a multi-task GNN |
+| FR-03 | Biological property prediction | High | Prediction of loading efficiency, release kinetics, toxicity, cellular uptake |
+| FR-04 | Multi-objective optimization | High | Simultaneous optimization of conflicting objectives with Pareto-Guided RL |
+| FR-05 | Simulation and validation | Medium | MD simulation for final confirmation of candidates |
+| FR-06 | Active learning and feedback | High | Continuous model updates with lab data |
+| FR-07 | User interface | Medium | Interactive dashboard for data entry and results display |
+| FR-08 | Data management | High | Integrated database for storing structures, properties and results |
+| FR-09 | Prediction interpretability | High | Attention layers + SHAP/LIME analysis for every prediction; confidence score and human-readable explanation for each output property |
+| FR-10 | Natural-language query interface | Medium | Define target parameters in natural/structured language, complementing the form-based dashboard |
+| FR-11 | Automated lab integration (Lab-in-the-loop) | Medium | API for connecting to robotic synthesis/high-throughput screening equipment, turning the feedback loop from manual data entry into automatic closed-loop feedback |
+| FR-12 | Continuous internal benchmark | High | Automatic measurement of model accuracy against public reference datasets (e.g., the 622-sample LNP set, LANCE) at every model release, to prevent hidden quality degradation |
+| FR-13 | Data standardization and interoperability | Medium | Data input/output per FAIR principles and the emerging MIRIBEL standard for nanoparticles, for interoperability with partners and regulators |
 
-### ۲.۲ الزامات غیرعملکردی (Non-Functional Requirements)
+### 2.2 Non-Functional Requirements
 
-| شناسه | الزام | مقدار هدف |
+| ID | Requirement | Target value |
 |---|---|---|
-| NFR-01 | دقت پیش‌بینی اندازه | RMSE < ۵ nm |
-| NFR-02 | دقت پیش‌بینی بار سطحی | RMSE < ۲ mV |
-| NFR-03 | دقت پیش‌بینی کارایی بارگذاری | R² > ۰.۸۵ |
-| NFR-04 | زمان تولید کتابخانه | < ۱۰ دقیقه برای ۱۰۰,۰۰۰ ساختار |
-| NFR-09 | دقت محاسبات انرژی اتصال در حالت پیشرفته (سطح شبه‌کوانتومی، اختیاری/مکمل MM-GBSA) | خطای < ۱ kcal/mol |
-| NFR-10 | حجم کتابخانه ساختاری اولیه (seed library) برای گرم‌کردن مدل مولد | حداقل ۱ میلیون ساختار مرجع از پایگاه‌های عمومی، پیش از تولید مصنوعی |
-| NFR-05 | زمان پیش‌بینی هر ساختار | < ۱۰۰ میلی‌ثانیه |
-| NFR-06 | زمان بهینه‌سازی | < ۱ ساعت برای ۱۰۰۰ کاندیدا |
-| NFR-07 | در دسترس بودن سیستم | ۹۹.۹٪ |
-| NFR-08 | مقیاس‌پذیری | پشتیبانی از حداقل ۱ میلیون ساختار |
+| NFR-01 | Size prediction accuracy | RMSE < 5 nm |
+| NFR-02 | Surface charge prediction accuracy | RMSE < 2 mV |
+| NFR-03 | Loading efficiency prediction accuracy | R² > 0.85 |
+| NFR-04 | Library generation time | < 10 minutes for 100,000 structures |
+| NFR-09 | Binding energy computation accuracy in advanced mode (quasi-quantum level, optional/complementary to MM-GBSA) | Error < 1 kcal/mol |
+| NFR-10 | Initial structural library (seed library) size for warming up the generative model | At least 1 million reference structures from public databases, before synthetic generation |
+| NFR-05 | Prediction time per structure | < 100 milliseconds |
+| NFR-06 | Optimization time | < 1 hour for 1000 candidates |
+| NFR-07 | System availability | 99.9% |
+| NFR-08 | Scalability | Support for at least 1 million structures |
 
-## ۳. معماری سیستم
+## 3. System Architecture
 
-### ۳.۱ نمای کلی معماری
+### 3.1 Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    لایه رابط کاربری (UI Layer)                  │
+│                    User Interface Layer (UI Layer)              │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │ داشبورد     │  │ گزارش‌گیر   │  │ تنظیمات پارامترها        │ │
+│  │ Dashboard   │  │ Reporter    │  │ Parameter settings       │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    لایه مدیریت داده (Data Layer)                │
+│                    Data Management Layer (Data Layer)          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │ پایگاه داده │  │ کش (Redis)  │  │ ذخیره‌سازی ابری         │ │
+│  │ Database    │  │ Cache (Redis)│ │ Cloud storage            │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    لایه پردازش (Processing Layer)               │
+│                    Processing Layer                              │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │  واحد ۱: تولید ساختار (Conditional VAE/GAN)               ││
+│  │  Unit 1: Structure generation (Conditional VAE/GAN)       ││
 │  ├─────────────────────────────────────────────────────────────┤│
-│  │  واحد ۲: پیش‌بینی فیزیکوشیمیایی (Multi-Task GNN)         ││
+│  │  Unit 2: Physicochemical prediction (Multi-Task GNN)      ││
 │  ├─────────────────────────────────────────────────────────────┤│
-│  │  واحد ۳: پیش‌بینی زیستی (Multi-Task Transformer/GNN)      ││
+│  │  Unit 3: Biological prediction (Multi-Task Transformer/GNN)││
 │  ├─────────────────────────────────────────────────────────────┤│
-│  │  واحد ۴: بهینه‌سازی چندهدفه (Pareto-Guided RL)            ││
+│  │  Unit 4: Multi-objective optimization (Pareto-Guided RL)  ││
 │  ├─────────────────────────────────────────────────────────────┤│
-│  │  واحد ۵: شبیه‌سازی MD (کوپل شده با GROMACS/OpenMM)        ││
+│  │  Unit 5: MD simulation (coupled with GROMACS/OpenMM)      ││
 │  ├─────────────────────────────────────────────────────────────┤│
-│  │  واحد ۶: یادگیری فعال (Uncertainty-Aware Sampling)        ││
+│  │  Unit 6: Active learning (Uncertainty-Aware Sampling)     ││
 │  └─────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### ۳.۲ جریان داده
+### 3.2 Data Flow
 
-1. **ورودی**: کاربر پارامترهای هدف را وارد می‌کند (نوع نانوحامل، محدوده اندازه، بافت هدف، محدودیت‌های سمیت)
-2. **تولید**: مدل VAE/GAN شرطی، ۱۰۰,۰۰۰+ ساختار جدید تولید می‌کند
-3. **پیش‌بینی**: GNN چندوظیفه‌ای ۷+ ویژگی را برای هر ساختار پیش‌بینی می‌کند
-4. **بهینه‌سازی**: الگوریتم Pareto-Guided RL، کاندیداهای بهینه را انتخاب می‌کند
-5. **اعتبارسنجی**: شبیه‌سازی MD برای ۱۰ کاندیدای برتر اجرا می‌شود
-6. **خروجی**: ۳-۵ کاندیدای نهایی به کاربر ارائه می‌شود
-7. **بازخورد**: نتایج آزمایشگاهی به پایگاه داده اضافه و مدل‌ها به‌روز می‌شوند
+1. **Input**: The user enters target parameters (nanocarrier type, size range, target tissue, toxicity constraints)
+2. **Generation**: The conditional VAE/GAN model generates 100,000+ new structures
+3. **Prediction**: The multi-task GNN predicts 7+ properties for each structure
+4. **Optimization**: The Pareto-Guided RL algorithm selects the optimal candidates
+5. **Validation**: MD simulation is run for the top 10 candidates
+6. **Output**: 3-5 final candidates are presented to the user
+7. **Feedback**: Lab results are added to the database and the models are updated
 
-## ۴. الزامات تفصیلی هر واحد
+## 4. Detailed Requirements for Each Unit
 
-### ۴.۱ واحد تولید ساختارهای مولکولی (FR-01)
+### 4.1 Molecular Structure Generation Unit (FR-01)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| نوع مدل | Conditional VAE + Conditional GAN (ensemble) |
-| ورودی | ویژگی‌های هدف (اندازه، بار، نوع حامل، بافت هدف) |
-| خروجی | SMILES + ساختار گرافی مولکول‌ها |
-| تعداد تولید در هر اجرا | ≥ ۱۰۰,۰۰۰ |
-| تنوع ساختاری | پوشش حداقل ۵۰۰ اسکلت مولکولی متفاوت |
-| نرخ ساختارهای معتبر | > ۹۵٪ (اعتبارسنجی با RDKit) |
+| Model type | Conditional VAE + Conditional GAN (ensemble) |
+| Input | Target properties (size, charge, carrier type, target tissue) |
+| Output | SMILES + molecular graph structure |
+| Generated per run | ≥ 100,000 |
+| Structural diversity | Coverage of at least 500 distinct molecular scaffolds |
+| Valid structure rate | > 95% (validated with RDKit) |
 
-پیاده‌سازی مرجع: [`src/ipind2/generation`](../src/ipind2/generation)
+Reference implementation: [`src/ipind2/generation`](../src/ipind2/generation)
 
-### ۴.۲ واحد پیش‌بینی ویژگی‌های فیزیکوشیمیایی (FR-02)
+### 4.2 Physicochemical Property Prediction Unit (FR-02)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| نوع مدل | Multi-Task Graph Neural Network (MPNN + Attention) |
-| ویژگی‌های پیش‌بینی | ۱. اندازه هیدرودینامیکی (nm)؛ ۲. پتانسیل زتا (mV)؛ ۳. شاخص چندپراکندگی (PDI)؛ ۴. پایداری کلوئیدی (نیمه‌عمر تجمع، ساعت)؛ ۵. کارایی محفظه‌سازی دارو (٪)؛ ۶. میزان بارگذاری دارو (٪ وزنی)؛ ۷. سینتیک رهایش (ثابت نرخ، k) |
-| دقت هدف | RMSE < ۵ nm برای اندازه، < ۲ mV برای زتا |
+| Model type | Multi-Task Graph Neural Network (MPNN + Attention) |
+| Predicted properties | 1. Hydrodynamic size (nm); 2. Zeta potential (mV); 3. Polydispersity index (PDI); 4. Colloidal stability (aggregation half-life, hours); 5. Drug encapsulation efficiency (%); 6. Drug loading content (wt%); 7. Release kinetics (rate constant, k) |
+| Target accuracy | RMSE < 5 nm for size, < 2 mV for zeta |
 
-پیاده‌سازی مرجع: [`src/ipind2/physicochemical`](../src/ipind2/physicochemical)
+Reference implementation: [`src/ipind2/physicochemical`](../src/ipind2/physicochemical)
 
-### ۴.۳ واحد پیش‌بینی ویژگی‌های زیستی (FR-03)
+### 4.3 Biological Property Prediction Unit (FR-03)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| نوع مدل | Multi-Task Transformer + GNN |
-| ویژگی‌های پیش‌بینی | ۱. سمیت سلولی (IC50, μg/mL) روی ≥ ۳ رده سلولی؛ ۲. کارایی نفوذ سلولی (٪)؛ ۳. برهم‌کنش با پروتئین‌های سرم (٪ اتصال)؛ ۴. نیمه‌عمر در گردش خون (ساعت)؛ ۵. نسبت تجمع تومور به بافت سالم (TBR) |
-| دقت هدف | R² > ۰.۸۵ برای تمام ویژگی‌ها |
+| Model type | Multi-Task Transformer + GNN |
+| Predicted properties | 1. Cytotoxicity (IC50, μg/mL) on ≥ 3 cell lines; 2. Cellular uptake efficiency (%); 3. Interaction with serum proteins (% binding); 4. Circulation half-life (hours); 5. Tumor-to-background ratio (TBR) |
+| Target accuracy | R² > 0.85 for all properties |
 
-پیاده‌سازی مرجع: [`src/ipind2/biological`](../src/ipind2/biological)
+Reference implementation: [`src/ipind2/biological`](../src/ipind2/biological)
 
-### ۴.۴ واحد بهینه‌سازی چندهدفه (FR-04)
+### 4.4 Multi-Objective Optimization Unit (FR-04)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| نوع الگوریتم | Pareto-Guided Reinforcement Learning (PG-RL) |
-| توابع هدف | حداکثرسازی کارایی بارگذاری و نفوذ سلولی؛ حداقل‌سازی سمیت و اندازه (در محدوده مطلوب)؛ حداکثرسازی پایداری |
-| تعداد کاندیداهای خروجی | ۱۰-۲۰ کاندیدای روی جبهه پارتو |
-| معیار همگرایی | تغییر < ۱٪ در ۱۰۰ تکرار |
+| Algorithm type | Pareto-Guided Reinforcement Learning (PG-RL) |
+| Objective functions | Maximize loading efficiency and cellular uptake; minimize toxicity and size (within the desired range); maximize stability |
+| Number of output candidates | 10-20 candidates on the Pareto front |
+| Convergence criterion | Change < 1% over 100 iterations |
 
-پیاده‌سازی مرجع: [`src/ipind2/optimization`](../src/ipind2/optimization)
+Reference implementation: [`src/ipind2/optimization`](../src/ipind2/optimization)
 
-### ۴.۵ واحد شبیه‌سازی دینامیک مولکولی (FR-05)
+### 4.5 Molecular Dynamics Simulation Unit (FR-05)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| موتور شبیه‌سازی | GROMACS / OpenMM (قابل انتخاب) |
-| میدان نیرو | CHARMM36 / OPLS-AA |
-| زمان شبیه‌سازی | ≥ ۱۰۰ ns برای هر کاندیدا |
-| خواص استخراج‌شده | ۱. انرژی آزاد اتصال (MM-GBSA)؛ ۲. شعاع ژیراسیون (Rg)؛ ۳. سطح تماس با حلال (SASA)؛ ۴. پارامتر ترازوی سفارش (Order Parameter) |
-| تعداد کاندیداهای شبیه‌سازی | ۵-۱۰ کاندیدای برتر از بهینه‌سازی |
+| Simulation engine | GROMACS / OpenMM (selectable) |
+| Force field | CHARMM36 / OPLS-AA |
+| Simulation time | ≥ 100 ns per candidate |
+| Extracted properties | 1. Binding free energy (MM-GBSA); 2. Radius of gyration (Rg); 3. Solvent-accessible surface area (SASA); 4. Order parameter |
+| Number of simulated candidates | Top 5-10 candidates from optimization |
 
-پیاده‌سازی مرجع: [`src/ipind2/md_simulation`](../src/ipind2/md_simulation)
+Reference implementation: [`src/ipind2/md_simulation`](../src/ipind2/md_simulation)
 
-### ۴.۶ واحد یادگیری فعال و بازخورد (FR-06)
+### 4.6 Active Learning and Feedback Unit (FR-06)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| استراتژی نمونه‌برداری | Uncertainty-Aware Sampling + Query-by-Committee |
-| معیار عدم‌قطعیت | واریانس پیش‌بینی بین مدل‌های ensemble |
-| دفعات به‌روزرسانی | پس از هر ۱۰-۵۰ داده آزمایشگاهی جدید |
-| روش به‌روزرسانی | Fine-tuning با Early Stopping |
+| Sampling strategy | Uncertainty-Aware Sampling + Query-by-Committee |
+| Uncertainty metric | Prediction variance across ensemble models |
+| Update frequency | After every 10-50 new lab data points |
+| Update method | Fine-tuning with Early Stopping |
 
-پیاده‌سازی مرجع: [`src/ipind2/active_learning`](../src/ipind2/active_learning)
+Reference implementation: [`src/ipind2/active_learning`](../src/ipind2/active_learning)
 
-### ۴.۷ واحد تفسیرپذیری (FR-09)
+### 4.7 Interpretability Unit (FR-09)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| روش‌ها | لایه‌های Attention درون GNN/Transformer + پس‌پردازش SHAP و LIME |
-| خروجی | نمره اهمیت هر ویژگی ورودی به ازای هر پیش‌بینی + نمره اطمینان مدل |
-| هدف | اکثر پلتفرم‌های رقیب نانوذره فاقد تفسیرپذیری رسمی‌اند (نگاه کنید به [`docs/BENCHMARK.md`](BENCHMARK.md))؛ این واحد یک مزیت رقابتی است |
+| Methods | Attention layers inside GNN/Transformer + SHAP and LIME post-processing |
+| Output | Importance score of each input feature per prediction + model confidence score |
+| Goal | Most competing nanoparticle platforms lack formal interpretability (see [`docs/BENCHMARK.md`](BENCHMARK.md)); this unit is a competitive advantage |
 
-پیاده‌سازی مرجع: [`src/ipind2/interpretability`](../src/ipind2/interpretability)
+Reference implementation: [`src/ipind2/interpretability`](../src/ipind2/interpretability)
 
-### ۴.۸ رابط پرس‌وجوی زبان طبیعی (FR-10)
+### 4.8 Natural-Language Query Interface (FR-10)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| ورودی | پرس‌وجوی زبان طبیعی یا فرم ساختاریافته برای تعیین پارامترهای هدف (نوع نانوحامل، بافت هدف، محدودیت‌ها) |
-| خروجی | تبدیل به پارامترهای ساختاریافته قابل‌مصرف برای واحد ۱ (تولید ساختار) |
+| Input | Natural-language query or structured form to specify target parameters (nanocarrier type, target tissue, constraints) |
+| Output | Conversion into structured parameters consumable by Unit 1 (structure generation) |
 
-پیاده‌سازی مرجع: [`src/ipind2/nlp_interface`](../src/ipind2/nlp_interface)
+Reference implementation: [`src/ipind2/nlp_interface`](../src/ipind2/nlp_interface)
 
-### ۴.۹ یکپارچگی با آزمایشگاه خودکار (FR-11)
+### 4.9 Automated Lab Integration (FR-11)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| نوع اتصال | API/آداپتور برای تجهیزات رباتیک سنتز و غربالگری با توان بالا (liquid handlers, high-throughput screening) |
-| جریان داده | نتایج آزمایش رباتیک به‌صورت خودکار وارد پایگاه داده و واحد یادگیری فعال (۴.۶) می‌شود |
-| نسخه اول | آداپتور generic با فرمت CSV/REST؛ اتصال مستقیم به تجهیزات خاص در فازهای بعدی |
+| Connection type | API/adapter for robotic synthesis and high-throughput screening equipment (liquid handlers, high-throughput screening) |
+| Data flow | Robotic experiment results automatically enter the database and the active learning unit (4.6) |
+| First version | Generic adapter with CSV/REST format; direct connection to specific equipment in later phases |
 
-پیاده‌سازی مرجع: [`src/ipind2/lab_automation`](../src/ipind2/lab_automation)
+Reference implementation: [`src/ipind2/lab_automation`](../src/ipind2/lab_automation)
 
-### ۴.۱۰ بنچمارک داخلی مستمر (FR-12)
+### 4.10 Continuous Internal Benchmark (FR-12)
 
-| مشخصه | مقدار |
+| Property | Value |
 |---|---|
-| دیتاست‌های مرجع | مجموعه‌های عمومی LNP (مثل دیتاست ۶۲۲ نمونه‌ای LNP، LANCE) |
-| زمان‌بندی | اجرای خودکار در هر انتشار مدل (CI برای مدل‌ها) |
-| خروجی | گزارش مقایسه RMSE/R² نسخه جدید در برابر نسخه قبلی و در برابر مقالات منتشرشده |
+| Reference datasets | Public LNP collections (e.g., the 622-sample LNP dataset, LANCE) |
+| Schedule | Runs automatically at every model release (CI for models) |
+| Output | Report comparing RMSE/R² of the new version against the previous version and against published papers |
 
-پیاده‌سازی مرجع: [`src/ipind2/benchmarking`](../src/ipind2/benchmarking)
+Reference implementation: [`src/ipind2/benchmarking`](../src/ipind2/benchmarking)
 
-مقایسه کامل با نمونه‌های بین‌المللی در [`docs/BENCHMARK.md`](BENCHMARK.md) آمده است.
+A full comparison with international counterparts is given in [`docs/BENCHMARK.md`](BENCHMARK.md).
 
-## ۵. الزامات داده
+## 5. Data Requirements
 
-### ۵.۱ داده‌های ورودی مورد نیاز برای آموزش
+### 5.1 Input Data Required for Training
 
-| نوع داده | تعداد نمونه | فرمت | منبع |
+| Data type | Number of samples | Format | Source |
 |---|---|---|---|
-| ساختارهای مولکولی | ≥ ۵۰,۰۰۰ | SMILES + SDF | پایگاه‌های عمومی (PubChem, ZINC) |
-| ویژگی‌های فیزیکوشیمیایی | ≥ ۳۰,۰۰۰ | CSV | ادبیات + پایگاه‌های تخصصی |
-| داده‌های زیستی (in vitro) | ≥ ۱۰,۰۰۰ | CSV | ادبیات + داده‌های اختصاصی |
-| داده‌های شبیه‌سازی MD | ≥ ۵,۰۰۰ | XTC + EDR | شبیه‌سازی‌های انجام‌شده |
+| Molecular structures | ≥ 50,000 | SMILES + SDF | Public databases (PubChem, ZINC) |
+| Physicochemical properties | ≥ 30,000 | CSV | Literature + specialized databases |
+| Biological data (in vitro) | ≥ 10,000 | CSV | Literature + proprietary data |
+| MD simulation data | ≥ 5,000 | XTC + EDR | Completed simulations |
 
-### ۵.۲ ساختار پایگاه داده
+### 5.2 Database Structure
 
-طرح کامل جداول در [`sql/schema.sql`](../sql/schema.sql) قرار دارد.
+The complete table schema is in [`sql/schema.sql`](../sql/schema.sql).
 
-## ۶. الزامات امنیتی و حریم خصوصی
+## 6. Security and Privacy Requirements
 
-| شناسه | الزام |
+| ID | Requirement |
 |---|---|
-| SEC-01 | احراز هویت دو مرحله‌ای برای تمام کاربران |
-| SEC-02 | رمزنگاری داده‌ها در حالت ذخیره‌سازی (AES-256) |
-| SEC-03 | رمزنگاری داده‌ها در حال انتقال (TLS 1.3) |
-| SEC-04 | لاگ‌گذاری تمام فعالیت‌های کاربران |
-| SEC-05 | دسترسی مبتنی بر نقش (RBAC): ادمین، محقق، مشاهده‌گر |
-| SEC-06 | پشتیبان‌گیری خودکار روزانه از پایگاه داده |
+| SEC-01 | Two-factor authentication for all users |
+| SEC-02 | Data encryption at rest (AES-256) |
+| SEC-03 | Data encryption in transit (TLS 1.3) |
+| SEC-04 | Logging of all user activities |
+| SEC-05 | Role-based access (RBAC): admin, researcher, viewer |
+| SEC-06 | Automatic daily database backup |
 
-## ۷. الزامات سخت‌افزاری و زیرساختی
+## 7. Hardware and Infrastructure Requirements
 
-| مشخصه | حداقل | پیشنهادی |
+| Property | Minimum | Recommended |
 |---|---|---|
-| CPU | ۱۶ هسته | ۳۲+ هسته |
-| RAM | ۶۴ GB | ۱۲۸+ GB |
-| GPU | NVIDIA A10 (۲۴GB) | NVIDIA A100 (۴۰GB) × ۲ |
-| ذخیره‌سازی | ۲ TB SSD | ۴+ TB NVMe SSD |
-| سیستم‌عامل | Ubuntu 20.04 LTS | Ubuntu 22.04 LTS |
-| پهنای باند | ۱۰۰ Mbps | ۱+ Gbps |
+| CPU | 16 cores | 32+ cores |
+| RAM | 64 GB | 128+ GB |
+| GPU | NVIDIA A10 (24GB) | NVIDIA A100 (40GB) × 2 |
+| Storage | 2 TB SSD | 4+ TB NVMe SSD |
+| Operating system | Ubuntu 20.04 LTS | Ubuntu 22.04 LTS |
+| Bandwidth | 100 Mbps | 1+ Gbps |
 
-## ۸. تولید داده‌های سنتتیک
+## 8. Synthetic Data Generation
 
-برای توسعه محصول با دقت بالا و خطای پایین، به داده‌های آموزشی متنوع و باکیفیت نیاز است. پیاده‌سازی تولیدکننده داده‌های سنتتیک در [`src/ipind2/data_generation/synthetic_data_generator.py`](../src/ipind2/data_generation/synthetic_data_generator.py) قرار دارد و ستون‌های خروجی آن به شرح زیر است:
+Developing the product with high accuracy and low error requires diverse, high-quality training data. The synthetic data generator is implemented in [`src/ipind2/data_generation/synthetic_data_generator.py`](../src/ipind2/data_generation/synthetic_data_generator.py) and its output columns are as follows:
 
-| ستون | نوع | توضیح |
+| Column | Type | Description |
 |---|---|---|
-| id | int | شناسه یکتا |
-| smiles | str | ساختار مولکولی در فرمت SMILES |
-| scaffold_name | str | نام اسکلت مولکولی |
-| scaffold_type | str | نوع: lipid/polymer/metal |
-| desc_mol_weight | float | وزن مولکولی (Da) |
-| desc_logP | float | ضریب تفکیک |
-| desc_tpsa | float | سطح قطبی (Å²) |
-| desc_num_rotatable_bonds | int | تعداد پیوندهای چرخان |
-| desc_num_h_donors | int | تعداد دهنده‌های هیدروژن |
-| desc_num_h_acceptors | int | تعداد گیرنده‌های هیدروژن |
-| phys_size_nm | float | اندازه نانوذره (nm) |
-| phys_zeta_potential_mV | float | پتانسیل زتا (mV) |
-| phys_pdi | float | شاخص چندپراکندگی |
-| phys_colloidal_stability_hours | float | پایداری کلوئیدی (ساعت) |
-| phys_drug_loading_efficiency_percent | float | کارایی بارگذاری (٪) |
-| phys_drug_loading_content_percent | float | میزان بارگذاری (٪ وزنی) |
-| phys_release_rate_constant | float | ثابت نرخ رهایش |
-| bio_cytotoxicity_ic50_ug_ml | float | سمیت سلولی (μg/mL) |
-| bio_cellular_uptake_efficiency_percent | float | کارایی نفوذ سلولی (٪) |
-| bio_serum_protein_binding_percent | float | اتصال به پروتئین سرم (٪) |
-| bio_circulation_half_life_hours | float | نیمه‌عمر گردش خون (ساعت) |
-| bio_tumor_to_background_ratio | float | نسبت تومور به بافت سالم |
-| pareto_score | float | امتیاز بهینه‌سازی پارتو |
-| is_pareto_optimal | int | آیا در جبهه پارتو است (۱/۰) |
-| pareto_rank | int | رتبه در جبهه پارتو |
+| id | int | Unique identifier |
+| smiles | str | Molecular structure in SMILES format |
+| scaffold_name | str | Molecular scaffold name |
+| scaffold_type | str | Type: lipid/polymer/metal |
+| desc_mol_weight | float | Molecular weight (Da) |
+| desc_logP | float | Partition coefficient |
+| desc_tpsa | float | Polar surface area (Å²) |
+| desc_num_rotatable_bonds | int | Number of rotatable bonds |
+| desc_num_h_donors | int | Number of hydrogen donors |
+| desc_num_h_acceptors | int | Number of hydrogen acceptors |
+| phys_size_nm | float | Nanoparticle size (nm) |
+| phys_zeta_potential_mV | float | Zeta potential (mV) |
+| phys_pdi | float | Polydispersity index |
+| phys_colloidal_stability_hours | float | Colloidal stability (hours) |
+| phys_drug_loading_efficiency_percent | float | Loading efficiency (%) |
+| phys_drug_loading_content_percent | float | Loading content (wt%) |
+| phys_release_rate_constant | float | Release rate constant |
+| bio_cytotoxicity_ic50_ug_ml | float | Cytotoxicity (μg/mL) |
+| bio_cellular_uptake_efficiency_percent | float | Cellular uptake efficiency (%) |
+| bio_serum_protein_binding_percent | float | Serum protein binding (%) |
+| bio_circulation_half_life_hours | float | Circulation half-life (hours) |
+| bio_tumor_to_background_ratio | float | Tumor-to-background ratio |
+| pareto_score | float | Pareto optimization score |
+| is_pareto_optimal | int | Whether on the Pareto front (1/0) |
+| pareto_rank | int | Rank on the Pareto front |
 
-اجرا:
+Run:
 
 ```bash
 pip install -r requirements.txt

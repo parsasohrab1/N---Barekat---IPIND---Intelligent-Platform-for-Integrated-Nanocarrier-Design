@@ -1,10 +1,10 @@
 """
-آداپتورهای اتصال به آزمایشگاه خودکار (Lab-in-the-loop Adapters)
+Automated Lab Adapters (Lab-in-the-loop Adapters)
 
-نسخه اول طبق SRS (FR-11): «آداپتور generic با فرمت CSV/REST؛ اتصال مستقیم به تجهیزات
-خاص در فازهای بعدی». این ماژول دقیقاً همین دو آداپتور generic را پیاده‌سازی می‌کند و
-یک رابط پایه (``LabAdapter``) تعریف می‌کند تا آداپتورهای اختصاصی تجهیزات (liquid
-handler، رباتیک سنتز و ...) در آینده بدون تغییر کد فراخوان اضافه شوند.
+First version per the SRS (FR-11): "generic adapter with CSV/REST format; direct connection to specific
+equipment in later phases". This module implements exactly these two generic adapters and
+defines a base interface (``LabAdapter``) so that equipment-specific adapters (liquid
+handler, synthesis robotics, etc.) can be added in the future without changing the calling code.
 
 See docs/SRS.md §4.9 (FR-11).
 """
@@ -18,33 +18,33 @@ from .schema import ExperimentalResult
 
 
 class LabAdapter(ABC):
-    """رابط پایه هر آداپتور آزمایشگاهی."""
+    """Base interface of every lab adapter."""
 
     @abstractmethod
     def fetch_new_results(self) -> List[ExperimentalResult]:
-        """نتایج آزمایشگاهی جدید را از منبع بیرونی می‌خواند و برمی‌گرداند.
+        """Reads new lab results from the external source and returns them.
 
-        هر فراخوانی باید فقط رکوردهایی را برگرداند که از فراخوانی قبلی همین
-        نمونه (instance) جدید هستند (idempotent per-instance)."""
+        Each call must return only records that are new since the previous call of this
+        instance (idempotent per-instance)."""
 
-    def close(self) -> None:  # pragma: no cover - پیش‌فرض no-op
+    def close(self) -> None:  # pragma: no cover - default no-op
         pass
 
 
 class CSVLabAdapter(LabAdapter):
     """
-    آداپتور خواندن نتایج آزمایشگاهی از یک فایل CSV با ستون‌های منطبق بر
-    ``ExperimentalResult`` (نگاه کنید به sql/schema.sql -> experimental_results).
+    Adapter for reading lab results from a CSV file with columns matching
+    ``ExperimentalResult`` (see sql/schema.sql -> experimental_results).
 
-    یک نمونه، ردیف‌هایی را که قبلاً برگردانده حفظ نمی‌کند بین اجراهای مجزای پردازش
-    (process)؛ برای پایداری cursor بین اجراها، شماره آخرین ردیف پردازش‌شده را در
-    لایه فراخوان (مثلاً پایگاه داده) ذخیره و به‌عنوان ``skip_rows`` در سازنده بدهید.
+    An instance does not retain rows it has already returned between separate process
+    runs; for cursor persistence across runs, store the number of the last processed row in the
+    calling layer (e.g., the database) and pass it to the constructor as ``skip_rows``.
     """
 
     def __init__(self, path: str, skip_rows: int = 0):
         self.path = Path(path)
         if not self.path.exists():
-            raise FileNotFoundError(f"فایل CSV آزمایشگاهی یافت نشد: {self.path}")
+            raise FileNotFoundError(f"Lab CSV file not found: {self.path}")
         self._rows_returned = skip_rows
 
     def fetch_new_results(self) -> List[ExperimentalResult]:
@@ -58,11 +58,11 @@ class CSVLabAdapter(LabAdapter):
 
 class RESTLabAdapter(LabAdapter):
     """
-    آداپتور generic برای اتصال به یک endpoint REST که نتایج آزمایشگاهی را به شکل
-    یک آرایه JSON (لیست از آبجکت‌هایی با همان فیلدهای ExperimentalResult) برمی‌گرداند.
+    Generic adapter for connecting to a REST endpoint that returns lab results as
+    a JSON array (a list of objects with the same fields as ExperimentalResult).
 
-    برای اتصال به تجهیزات خاص (liquid handler، دستگاه غربالگری اختصاصی)، این کلاس را
-    زیرکلاسی کنید و ``_parse_response`` را بازنویسی (override) کنید.
+    To connect to specific equipment (liquid handler, proprietary screening device), subclass this
+    class and override ``_parse_response``.
     """
 
     def __init__(
@@ -84,7 +84,7 @@ class RESTLabAdapter(LabAdapter):
         return headers
 
     def fetch_new_results(self) -> List[ExperimentalResult]:
-        import requests  # local import: این آداپتور تنها مصرف‌کننده requests است
+        import requests  # local import: this adapter is the only consumer of requests
 
         response = requests.get(
             f"{self.base_url}{self.results_path}",
@@ -97,5 +97,5 @@ class RESTLabAdapter(LabAdapter):
 
     def _parse_response(self, payload) -> List[ExperimentalResult]:
         if not isinstance(payload, list):
-            raise ValueError("پاسخ REST باید یک لیست JSON از رکوردها باشد")
+            raise ValueError("The REST response must be a JSON list of records")
         return [ExperimentalResult.from_dict(record) for record in payload]

@@ -1,9 +1,9 @@
 """
-اجرای بنچمارک و ردیابی تاریخچه برای شناسایی افت دقت (regression) بین نسخه‌های مدل.
+Benchmark execution and history tracking to detect accuracy regression between model versions.
 
-طبق FR-12: «سنجش خودکار دقت مدل‌ها در برابر دیتاست‌های عمومی مرجع در هر انتشار مدل».
-این ماژول برای اجرا در CI طراحی شده — ``assert_no_regression`` می‌تواند در یک pipeline
-با کد خروج غیرصفر (exception) استفاده شود تا از انتشار مدلی با دقت پایین‌تر جلوگیری کند.
+Per FR-12: "automatic measurement of model accuracy against public reference datasets at every model release".
+This module is designed to run in CI — ``assert_no_regression`` can be used in a pipeline
+with a non-zero exit code (exception) to prevent releasing a model with lower accuracy.
 
 See docs/SRS.md §4.10 (FR-12).
 """
@@ -22,7 +22,7 @@ from .metrics import r_squared, rmse
 
 @dataclass
 class BenchmarkResult:
-    """نتیجه یک اجرای بنچمارک برای یک دیتاست مرجع مشخص."""
+    """Result of one benchmark run for a given reference dataset."""
 
     dataset: str
     model_version: str
@@ -43,9 +43,9 @@ def run_benchmark(
     model_version: str = "unversioned",
     dataset_name: str = "unnamed",
 ) -> BenchmarkResult:
-    """اجرای یک مدل روی یک دیتاست مرجع و محاسبه RMSE/R²."""
+    """Run a model on a reference dataset and compute RMSE/R²."""
     if target_column not in dataset.columns:
-        raise ValueError(f"ستون هدف '{target_column}' در دیتاست موجود نیست")
+        raise ValueError(f"Target column '{target_column}' is not present in the dataset")
 
     feature_columns = list(feature_columns) if feature_columns else [
         c for c in dataset.columns if c != target_column
@@ -64,7 +64,7 @@ def run_benchmark(
 
 
 class BenchmarkHistory:
-    """ذخیره‌سازی ساده مبتنی بر فایل JSON برای تاریخچه اجرای بنچمارک‌ها."""
+    """Simple JSON-file-based storage for benchmark run history."""
 
     def __init__(self, path: str):
         self.path = Path(path)
@@ -90,7 +90,7 @@ class BenchmarkHistory:
 
 @dataclass
 class RegressionReport:
-    """نتیجه مقایسه یک اجرای جدید با آخرین اجرای قبلی برای همان دیتاست."""
+    """Result of comparing a new run with the last previous run for the same dataset."""
 
     dataset: str
     regressed: bool
@@ -106,11 +106,11 @@ def check_regression(
     r2_tolerance: float = 0.0,
 ) -> RegressionReport:
     """
-    مقایسه ``result`` با آخرین نتیجه ثبت‌شده در ``history`` برای همان دیتاست.
+    Compare ``result`` with the last result recorded in ``history`` for the same dataset.
 
     Args:
-        rmse_tolerance: حداکثر افزایش مجاز RMSE بدون علامت‌گذاری به‌عنوان regression.
-        r2_tolerance: حداکثر کاهش مجاز R² بدون علامت‌گذاری به‌عنوان regression.
+        rmse_tolerance: maximum allowed RMSE increase without flagging as regression.
+        r2_tolerance: maximum allowed R² decrease without flagging as regression.
     """
     previous = history.latest_for(result.dataset)
     if previous is None:
@@ -119,11 +119,11 @@ def check_regression(
             regressed=False,
             delta_rmse=None,
             delta_r2=None,
-            message="اجرای قبلی برای مقایسه موجود نیست (اولین بنچمارک این دیتاست)",
+            message="No previous run available for comparison (first benchmark for this dataset)",
         )
 
-    delta_rmse = result.rmse - previous.rmse  # مثبت یعنی بدتر شدن
-    delta_r2 = result.r2 - previous.r2  # منفی یعنی بدتر شدن
+    delta_rmse = result.rmse - previous.rmse  # positive means worse
+    delta_r2 = result.r2 - previous.r2  # negative means worse
     regressed = delta_rmse > rmse_tolerance or delta_r2 < -r2_tolerance
 
     message = (
@@ -145,8 +145,8 @@ def assert_no_regression(
     rmse_tolerance: float = 0.0,
     r2_tolerance: float = 0.0,
 ) -> RegressionReport:
-    """مثل ``check_regression`` اما در صورت افت دقت، ``AssertionError`` می‌اندازد (برای CI)."""
+    """Like ``check_regression`` but raises ``AssertionError`` on accuracy drop (for CI)."""
     report = check_regression(history, result, rmse_tolerance, r2_tolerance)
     if report.regressed:
-        raise AssertionError(f"افت دقت مدل روی دیتاست '{result.dataset}': {report.message}")
+        raise AssertionError(f"Model accuracy drop on dataset '{result.dataset}': {report.message}")
     return report

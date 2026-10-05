@@ -1,10 +1,10 @@
 """
-دریافت و آماده‌سازی نتایج آزمایشگاهی برای پایگاه داده و حلقه یادگیری فعال.
+Ingestion and preparation of lab results for the database and the active learning loop.
 
-جریان: LabAdapter.fetch_new_results() -> ingest_results() -> DataFrame آماده برای
-درج در جدول experimental_results و/یا شروع یک دور یادگیری فعال (واحد ۶، FR-06).
+Flow: LabAdapter.fetch_new_results() -> ingest_results() -> DataFrame ready for
+insertion into the experimental_results table and/or starting an active learning round (Unit 6, FR-06).
 
-See docs/SRS.md §4.9 (FR-11) و §4.6 (FR-06).
+See docs/SRS.md §4.9 (FR-11) and §4.6 (FR-06).
 """
 
 from typing import List
@@ -14,13 +14,13 @@ import pandas as pd
 from .adapters import LabAdapter
 from .schema import ExperimentalResult
 
-# طبق SRS §4.6: «دفعات به‌روزرسانی: پس از هر ۱۰-۵۰ داده آزمایشگاهی جدید»
+# Per SRS §4.6: "Update frequency: after every 10-50 new lab data points"
 DEFAULT_MIN_RETRAIN_BATCH = 10
 DEFAULT_MAX_RETRAIN_BATCH = 50
 
 
 def ingest_results(adapter: LabAdapter) -> pd.DataFrame:
-    """نتایج جدید را از یک آداپتور می‌گیرد و به DataFrame منطبق بر experimental_results تبدیل می‌کند."""
+    """Takes new results from an adapter and converts them to a DataFrame matching experimental_results."""
     results: List[ExperimentalResult] = adapter.fetch_new_results()
     if not results:
         return pd.DataFrame(
@@ -42,9 +42,9 @@ def should_trigger_retrain(
     min_batch: int = DEFAULT_MIN_RETRAIN_BATCH,
 ) -> bool:
     """
-    آیا تعداد داده‌های آزمایشگاهی جدید کافی است تا واحد یادگیری فعال یک دور
-    fine-tuning جدید را آغاز کند (طبق آستانه SRS §4.6: هر ۱۰-۵۰ رکورد).
+    Whether the number of new lab data points is sufficient for the active learning unit to start a new round of
+    fine-tuning (per the SRS §4.6 threshold: every 10-50 records).
     """
     if min_batch <= 0:
-        raise ValueError("min_batch باید مثبت باشد")
+        raise ValueError("min_batch must be positive")
     return new_result_count >= min_batch

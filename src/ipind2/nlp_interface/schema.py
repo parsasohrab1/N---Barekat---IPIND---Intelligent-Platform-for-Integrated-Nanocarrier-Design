@@ -1,4 +1,4 @@
-"""ساختار داده پارامترهای هدف استخراج‌شده از پرس‌وجوی کاربر. See docs/SRS.md §4.8 (FR-10)."""
+"""Data structure of target parameters extracted from the user query. See docs/SRS.md §4.8 (FR-10)."""
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -7,11 +7,11 @@ from typing import List, Optional, Tuple
 @dataclass
 class TargetParameters:
     """
-    پارامترهای هدف طراحی نانوحامل، معادل ورودی واحد ۱ (تولید ساختار، FR-01).
+    Nanocarrier design target parameters, equivalent to the input of Unit 1 (structure generation, FR-01).
 
-    فیلدهای ``None`` یعنی آن قید در پرس‌وجو ذکر نشده و باید مقدار پیش‌فرض/از کاربر
-    گرفته شود؛ ``unresolved_terms`` عبارت‌هایی را نشان می‌دهد که پارسر نتوانست به هیچ
-    پارامتر شناخته‌شده‌ای نگاشت کند (برای بازخورد به کاربر یا بازبینی دستی مفید است).
+    ``None`` fields mean that constraint was not mentioned in the query and the default value/value from the user
+    must be used; ``unresolved_terms`` shows phrases the parser could not map to any
+    known parameter (useful for user feedback or manual review).
     """
 
     scaffold_type: Optional[str] = None  # 'lipid' | 'polymer' | 'metal'
@@ -23,7 +23,7 @@ class TargetParameters:
     unresolved_terms: List[str] = field(default_factory=list)
 
     def is_complete(self) -> bool:
-        """آیا حداقل نوع اسکلت و بافت هدف مشخص شده‌اند (کمینه لازم برای واحد تولید)."""
+        """Whether at least the scaffold type and target tissue are specified (minimum required for the generation unit)."""
         return self.scaffold_type is not None and self.target_tissue is not None
 
     def to_dict(self) -> dict:

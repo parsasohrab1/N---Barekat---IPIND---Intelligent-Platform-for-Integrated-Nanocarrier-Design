@@ -1,14 +1,14 @@
 """
-رابط پرس‌وجوی زبان طبیعی (Natural-Language Query Interface)
+Natural-Language Query Interface
 
-یک پارسر قانون‌محور (rule-based) و کاملاً آفلاین که پارامترهای هدف طراحی نانوحامل را
-از یک متن آزاد فارسی/انگلیسی استخراج می‌کند و به ``TargetParameters`` ساختاریافته
-(ورودی واحد تولید ساختار، FR-01) تبدیل می‌کند. بدون وابستگی به هیچ سرویس خارجی/LLM
-کار می‌کند تا رفتار آن قطعی (deterministic) و آفلاین باشد.
+A rule-based, fully offline parser that extracts nanocarrier design target parameters
+from free Persian/English text and converts them to a structured ``TargetParameters``
+(input of the structure generation unit, FR-01). It works without dependence on any external service/LLM
+so that its behavior is deterministic and offline.
 
-طراحی به‌گونه‌ای است که بعداً بتوان یک ``QueryParser`` مبتنی بر LLM (مثلاً برای درک
-عبارات پیچیده‌تر) را بدون تغییر در کد فراخوان جایگزین/اضافه کرد — نگاه کنید به پروتکل
-``QueryParser`` در پایین این فایل.
+It is designed so that an LLM-based ``QueryParser`` (e.g., for understanding more
+complex phrases) can later be substituted/added without changing the calling code — see the
+``QueryParser`` protocol at the bottom of this file.
 
 See docs/SRS.md §4.8 (FR-10).
 """
@@ -67,9 +67,9 @@ def _find_keyword_match(text: str, keyword_map: Dict[str, List[str]]) -> Optiona
 
 def parse_query(text: str) -> TargetParameters:
     """
-    استخراج ``TargetParameters`` از یک پرس‌وجوی آزاد فارسی/انگلیسی.
+    Extract ``TargetParameters`` from a free Persian/English query.
 
-    مثال:
+    Example:
         >>> p = parse_query("یک نانوحامل لیپیدی برای هدف‌گیری تومور، اندازه بین ۸۰ تا ۱۲۰ نانومتر")
         >>> p.scaffold_type, p.target_tissue, p.size_range_nm
         ('lipid', 'tumor', (80.0, 120.0))
@@ -105,13 +105,13 @@ def parse_query(text: str) -> TargetParameters:
 
 
 class QueryParser(Protocol):
-    """رابط عمومی پارسر پرس‌وجو — برای جایگزینی آسان با یک پیاده‌سازی مبتنی بر LLM."""
+    """Public interface of the query parser — for easy replacement with an LLM-based implementation."""
 
     def parse(self, text: str) -> TargetParameters: ...
 
 
 class RuleBasedQueryParser:
-    """پیاده‌سازی پیش‌فرض QueryParser با استفاده از قواعد/regex آفلاین."""
+    """Default QueryParser implementation using offline rules/regex."""
 
     def parse(self, text: str) -> TargetParameters:
         return parse_query(text)

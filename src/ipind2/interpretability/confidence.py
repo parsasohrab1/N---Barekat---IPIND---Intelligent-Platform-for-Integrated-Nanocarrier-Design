@@ -1,10 +1,10 @@
 """
-تخمین اطمینان مبتنی بر ensemble (Ensemble-Based Confidence Estimation)
+Ensemble-Based Confidence Estimation
 
-معیار عدم‌قطعیت را از واریانس پیش‌بینی چند مدل (ensemble) محاسبه می‌کند و آن را به
-یک نمره اطمینان نرمال‌شده (0..1) تبدیل می‌کند. همان معیاری که واحد یادگیری فعال
-(ipind2.active_learning) برای Uncertainty-Aware Sampling استفاده می‌کند، اینجا برای
-همراه‌کردن هر پیش‌بینی با یک درجه اطمینان قابل‌گزارش بازاستفاده می‌شود.
+Computes the uncertainty measure from the prediction variance of several models (ensemble) and converts it to
+a normalized confidence score (0..1). The same measure that the active learning unit
+(ipind2.active_learning) uses for Uncertainty-Aware Sampling is reused here to
+attach a reportable confidence level to every prediction.
 
 See docs/SRS.md §4.7 (FR-09) and §4.6 (FR-06).
 """
@@ -17,14 +17,14 @@ import numpy as np
 
 @dataclass
 class ConfidenceScore:
-    """نتیجه تخمین اطمینان برای یک نمونه."""
+    """Confidence estimation result for one sample."""
 
     mean: float
     std: float
-    confidence: float  # در بازه [0, 1]؛ هرچه بالاتر، عدم‌قطعیت کمتر
+    confidence: float  # in the range [0, 1]; higher means lower uncertainty
 
     def is_high_uncertainty(self, threshold: float = 0.5) -> bool:
-        """آیا این نمونه کاندیدای مناسبی برای نمونه‌برداری یادگیری فعال است."""
+        """Whether this sample is a good candidate for active learning sampling."""
         return self.confidence < threshold
 
 
@@ -33,15 +33,15 @@ def ensemble_confidence(
     scale: float = 1.0,
 ) -> ConfidenceScore:
     """
-    محاسبه اطمینان برای یک نمونه از روی پیش‌بینی چند مدل ensemble.
+    Compute confidence for one sample from the predictions of several ensemble models.
 
     Args:
-        predictions: پیش‌بینی هر یک از مدل‌های ensemble برای یک نمونه (حداقل ۲ مدل).
-        scale: مقیاس مورد انتظار انحراف‌معیار برای نرمال‌سازی confidence؛ باید متناسب
-            با دامنه مقدار هدف تنظیم شود (مثلاً nm برای اندازه، mV برای زتا).
+        predictions: prediction of each ensemble model for one sample (at least 2 models).
+        scale: expected scale of the standard deviation for normalizing confidence; should be
+            tuned to the range of the target value (e.g., nm for size, mV for zeta).
 
     Returns:
-        ConfidenceScore با میانگین، انحراف‌معیار و نمره اطمینان نرمال‌شده.
+        ConfidenceScore with the mean, standard deviation and normalized confidence score.
     """
     if len(predictions) < 2:
         raise ValueError("ensemble_confidence needs at least 2 model predictions")
@@ -51,7 +51,7 @@ def ensemble_confidence(
     arr = np.asarray(predictions, dtype=float)
     mean = float(arr.mean())
     std = float(arr.std(ddof=1))
-    # نگاشت انحراف‌معیار به بازه (0, 1] با یک تابع نمایی نزولی: std=0 -> confidence=1
+    # Map the standard deviation to the range (0, 1] with a decreasing exponential function: std=0 -> confidence=1
     confidence = float(np.exp(-std / scale))
     return ConfidenceScore(mean=mean, std=std, confidence=confidence)
 
@@ -61,14 +61,14 @@ def batch_ensemble_confidence(
     scale: float = 1.0,
 ) -> list:
     """
-    نسخه دسته‌ای (batch) از ``ensemble_confidence``.
+    Batch version of ``ensemble_confidence``.
 
     Args:
-        predictions: آرایه به شکل (n_models, n_samples).
-        scale: مقیاس نرمال‌سازی، مطابق ``ensemble_confidence``.
+        predictions: array of shape (n_models, n_samples).
+        scale: normalization scale, as in ``ensemble_confidence``.
 
     Returns:
-        فهرستی از ConfidenceScore به طول n_samples.
+        List of ConfidenceScore of length n_samples.
     """
     predictions = np.asarray(predictions, dtype=float)
     if predictions.ndim != 2:

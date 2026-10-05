@@ -85,7 +85,7 @@ class TestCSVLabAdapter:
         first = adapter.fetch_new_results()
         assert len(first) == 1
 
-        # شبیه‌سازی افزوده‌شدن یک نتیجه جدید به فایل CSV آزمایشگاهی
+        # Simulate a new result being appended to the lab CSV file
         _write_csv(
             csv_path,
             [

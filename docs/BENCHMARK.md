@@ -1,46 +1,46 @@
-# بنچمارک بین‌المللی: IPIND² در برابر نمونه‌های خارجی
+# International Benchmark: IPIND² vs. Foreign Counterparts
 
-این سند، پلتفرم IPIND² (مطابق [`docs/SRS.md`](SRS.md)) را با مهم‌ترین نمونه‌های صنعتی و پژوهشی بین‌المللی در حوزه طراحی هوشمند نانوحامل/نانوذره دارویی مقایسه می‌کند. نتیجه این بنچمارک به شکل الزامات جدید (FR-09 تا FR-13، NFR-09 و NFR-10) به SRS اضافه شده است.
+This document compares the IPIND² platform (per [`docs/SRS.md`](SRS.md)) with the most important international industrial and research counterparts in intelligent drug nanocarrier/nanoparticle design. The result of this benchmark has been added to the SRS as new requirements (FR-09 to FR-13, NFR-09 and NFR-10).
 
-⚠️ این یک تحلیل فنی/رقابتی عمومی است، نه یک سند حقوقی یا ادعای ثبت اختراع — برای تحلیل قابلیت ثبت اختراع به `docs/patent/` (رمزگذاری‌شده) مراجعه کنید.
+⚠️ This is a general technical/competitive analysis, not a legal document or a patent claim — for patentability analysis see `docs/patent/` (encrypted).
 
-## نمونه‌های بررسی‌شده
+## Counterparts reviewed
 
-| نمونه | ماهیت | ویژگی کلیدی |
+| Counterpart | Nature | Key feature |
 |---|---|---|
-| **NanoForge (METiS TechBio، چین، سپتامبر ۲۰۲۵)** | پلتفرم صنعتی end-to-end | شیمی کوانتومی + MD، غربالگری آزمایشگاهی اختصاصی با توان بالا، عامل‌های AI، کتابخانه >۱۰ میلیون ساختار لیپیدی، ورودی زبان طبیعی |
-| **Chemistry42 (Insilico Medicine)** | پلتفرم صنعتی برای مولکول‌های کوچک (نه اختصاصاً نانوذره) | ۴۲ الگوریتم مولد در قالب چندعامل RL، به‌کارگیری توسط ۲۰+ شرکت دارویی (از جمله Merck KGaA) |
-| **آزمایشگاه خودکار دانشگاه تورنتو** | نمونه پژوهشی self-driving lab برای LNP | حلقه کاملاً بسته با رباتیک سنتز/آزمایش واقعی، نه فقط شبیه‌سازی |
-| **AGILE** | پژوهشی | ترکیب DL + شیمی ترکیبی برای غربالگری این‌سیلیکوی لیپید یونیزه‌شونده |
-| **COMET / دیتاست LANCE، LANTERN** | پژوهشی/بنچمارک صنعتی نوظهور | پیش‌بینی چندوظیفه‌ای Transformer برای LNP + چارچوب بنچمارکینگ استاندارد صنعت |
+| **NanoForge (METiS TechBio, China, September 2025)** | End-to-end industrial platform | Quantum chemistry + MD, proprietary high-throughput lab screening, AI agents, library of >10 million lipid structures, natural-language input |
+| **Chemistry42 (Insilico Medicine)** | Industrial platform for small molecules (not specifically nanoparticles) | 42 generative algorithms in a multi-agent RL framework, used by 20+ pharmaceutical companies (including Merck KGaA) |
+| **University of Toronto self-driving lab** | Research self-driving lab example for LNPs | Fully closed loop with real synthesis/testing robotics, not just simulation |
+| **AGILE** | Research | Combination of DL + combinatorial chemistry for in-silico screening of ionizable lipids |
+| **COMET / LANCE and LANTERN datasets** | Emerging research/industrial benchmark | Multi-task Transformer prediction for LNPs + industry-standard benchmarking framework |
 
-## جدول مقایسه فنی
+## Technical comparison table
 
-| بُعد فنی | IPIND² (طبق SRS فعلی) | NanoForge | Chemistry42 | Self-driving lab (تورنتو) |
+| Technical dimension | IPIND² (per current SRS) | NanoForge | Chemistry42 | Self-driving lab (Toronto) |
 |---|---|---|---|---|
-| انواع اسکلت پوشش‌داده‌شده | لیپیدی + پلیمری + فلزی (۳ نوع) | عمدتاً لیپیدی/اسید نوکلئیک | مولکول کوچک عمومی | فقط LNP |
-| تعداد ویژگی پیش‌بینی هم‌زمان | ≥۷ (فیزیکوشیمیایی + زیستی) | نامشخص/عمومی | N/A | محدود (چند ویژگی ترانسفکشن) |
-| روش بهینه‌سازی | Pareto-Guided RL | عامل‌های AI (جزئیات افشا نشده) | چندعامل RL با ۴۲ مدل مولد (تنوع بالا) | بهینه‌سازی بیزی/تجربی |
-| یکپارچگی با آزمایشگاه فیزیکی | فقط ورود دستی داده آزمایشگاهی | غربالگری اختصاصی high-throughput | برون‌سپاری به شرکای دارویی | کاملاً رباتیک، حلقه بسته زنده |
-| مقیاس کتابخانه seed اولیه | تعریف‌نشده (فقط ≥۵۰k داده آموزشی) | >۱۰ میلیون ساختار | N/A | کوچک، متمرکز بر LNP |
-| سطح محاسبات فیزیک/شیمی | MD کلاسیک (GROMACS/OpenMM) | شیمی کوانتومی + MD | N/A | تجربی |
-| تفسیرپذیری رسمی (XAI) | نبود (تا پیش از این بنچمارک) | نامشخص | نامشخص | ندارد |
-| رابط کاربری | داشبورد فرم‌محور | پرس‌وجوی زبان طبیعی | پلتفرم یکپارچه سازمانی | رابط آزمایشگاهی |
-| بنچمارک مستمر در برابر دیتاست عمومی | نبود (تا پیش از این بنچمارک) | نامشخص | دارای سابقه اعتبارسنجی گسترده صنعتی | خودِ داده تجربی، منبع بنچمارک است |
-| استانداردسازی داده (FAIR/MIRIBEL) | نبود | نامشخص | نامشخص | نامشخص |
+| Scaffold types covered | Lipid + polymer + metal (3 types) | Mainly lipid/nucleic acid | General small molecule | LNP only |
+| Number of simultaneously predicted properties | ≥7 (physicochemical + biological) | Unspecified/general | N/A | Limited (a few transfection properties) |
+| Optimization method | Pareto-Guided RL | AI agents (details undisclosed) | Multi-agent RL with 42 generative models (high diversity) | Bayesian/empirical optimization |
+| Integration with physical lab | Manual lab data entry only | Proprietary high-throughput screening | Outsourced to pharma partners | Fully robotic, live closed loop |
+| Initial seed library scale | Undefined (only ≥50k training data) | >10 million structures | N/A | Small, LNP-focused |
+| Physics/chemistry computation level | Classical MD (GROMACS/OpenMM) | Quantum chemistry + MD | N/A | Experimental |
+| Formal interpretability (XAI) | Absent (before this benchmark) | Unspecified | Unspecified | None |
+| User interface | Form-based dashboard | Natural-language query | Integrated enterprise platform | Lab interface |
+| Continuous benchmarking against public datasets | Absent (before this benchmark) | Unspecified | Extensive industrial validation history | The experimental data itself is the benchmark source |
+| Data standardization (FAIR/MIRIBEL) | Absent | Unspecified | Unspecified | Unspecified |
 
-## نتیجه‌گیری: مزیت‌های فنی که IPIND² کم داشت و اضافه شد
+## Conclusion: technical advantages IPIND² lacked and that were added
 
-بر اساس این مقایسه، پنج الزام فنی جدید به SRS اضافه شد تا فاصله با پیشروترین نمونه‌های بین‌المللی پر شود:
+Based on this comparison, five new technical requirements were added to the SRS to close the gap with the most advanced international counterparts:
 
-1. **FR-09 — تفسیرپذیری رسمی (SHAP/LIME/Attention)**: اکثر رقبا (از جمله NanoForge) این را به‌صراحت اعلام نکرده‌اند؛ رسمی‌کردنش در IPIND² یک مزیت رقابتی واقعی است، نه فقط جبران عقب‌ماندگی.
-2. **FR-10 — رابط پرس‌وجوی زبان طبیعی**: برای همتراز شدن با تجربه کاربری NanoForge.
-3. **FR-11 — یکپارچگی با آزمایشگاه خودکار (lab-in-the-loop)**: مهم‌ترین شکاف — رقبای برتر (NanoForge، self-driving lab تورنتو) حلقه بازخورد را با رباتیک واقعی می‌بندند، نه ورود دستی داده.
-4. **FR-12 — بنچمارک داخلی مستمر در برابر دیتاست‌های عمومی (LNP-622، LANCE)**: برای اثبات شفاف رقابتی‌بودن دقت مدل‌ها، به‌ویژه در برابر ادعاهای دقت بالای Chemistry42 و LANTERN.
-5. **FR-13 / NFR-10 — استانداردسازی داده (FAIR/MIRIBEL) و کتابخانه seed بزرگ‌مقیاس (≥۱ میلیون ساختار)**: کاهش cold-start مدل مولد و افزایش تعامل‌پذیری با شرکا، در راستای روند صنعت.
-6. **NFR-09 — دقت محاسبات سطح شبه‌کوانتومی (اختیاری، مکمل MD کلاسیک)**: برای نزدیک‌شدن به دقت محاسباتی NanoForge که از شیمی کوانتومی در کنار MD استفاده می‌کند.
+1. **FR-09 — Formal interpretability (SHAP/LIME/Attention)**: most competitors (including NanoForge) have not explicitly announced this; formalizing it in IPIND² is a real competitive advantage, not just catching up.
+2. **FR-10 — Natural-language query interface**: to match the NanoForge user experience.
+3. **FR-11 — Automated lab integration (lab-in-the-loop)**: the most important gap — top competitors (NanoForge, Toronto self-driving lab) close the feedback loop with real robotics, not manual data entry.
+4. **FR-12 — Continuous internal benchmarking against public datasets (LNP-622, LANCE)**: to transparently prove the competitiveness of model accuracy, especially against the high-accuracy claims of Chemistry42 and LANTERN.
+5. **FR-13 / NFR-10 — Data standardization (FAIR/MIRIBEL) and a large-scale seed library (≥1 million structures)**: reducing generative-model cold start and increasing interoperability with partners, in line with the industry trend.
+6. **NFR-09 — Quasi-quantum-level computational accuracy (optional, complementary to classical MD)**: to approach the computational accuracy of NanoForge, which uses quantum chemistry alongside MD.
 
-## منابع
+## References
 
 - [METiS Launches World's First AI-Driven Nano-Delivery Platform NanoForge](https://www.metistechbio.com/en/qyxw/180.html)
 - [Chemistry42: An AI-Driven Platform for Molecular Design and Optimization — J. Chem. Inf. Model.](https://pubs.acs.org/doi/10.1021/acs.jcim.2c01191)

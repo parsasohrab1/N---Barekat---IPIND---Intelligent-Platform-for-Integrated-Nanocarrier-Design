@@ -18,8 +18,8 @@ __all__ = [
 
 
 def __getattr__(name):
-    # AttentionExtractor نیاز به torch دارد؛ import تنبل تا وارد کردن این پکیج بدون
-    # torch نصب‌شده (مثلاً فقط برای تفسیر SHAP روی مدل‌های sklearn) شکست نخورد.
+    # AttentionExtractor requires torch; lazy import so importing this package without
+    # torch installed (e.g. only for SHAP interpretation on sklearn models) does not fail.
     if name == "AttentionExtractor":
         from .attention import AttentionExtractor
 

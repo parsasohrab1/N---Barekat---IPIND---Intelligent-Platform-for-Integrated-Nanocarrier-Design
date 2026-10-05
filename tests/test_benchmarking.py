@@ -113,7 +113,7 @@ class TestBenchmarkHistoryAndRegression:
         )
         history.append(good_result)
 
-        # مدل بدتر: ضریب اشتباه
+        # Worse model: wrong coefficient
         bad_result = run_benchmark(
             lambda X: X["feature_a"] * 1.5, toy_dataset, "target", dataset_name="toy", model_version="v2"
         )

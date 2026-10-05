@@ -1,4 +1,4 @@
-"""معیارهای دقت مطابق NFR-01..NFR-03 در docs/SRS.md."""
+"""Accuracy metrics per NFR-01..NFR-03 in docs/SRS.md."""
 
 import numpy as np
 
@@ -13,7 +13,7 @@ def rmse(y_true, y_pred) -> float:
 
 
 def r_squared(y_true, y_pred) -> float:
-    """ضریب تعیین R²."""
+    """Coefficient of determination R²."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     if y_true.shape != y_pred.shape:

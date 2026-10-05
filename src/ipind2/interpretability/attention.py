@@ -1,10 +1,10 @@
 """
-استخراج وزن‌های توجه (Attention) از مدل‌های GNN/Transformer
+Extraction of attention weights from GNN/Transformer models
 
-ابزاری model-agnostic که بدون نیاز به تغییر معماری مدل، وزن‌های لایه‌های Attention را
-از طریق forward hook در حین یک پیش-رو (forward pass) واقعی می‌گیرد. برای استفاده در
-واحدهای ۲ و ۳ (MPNN+Attention، Transformer+GNN) که هنوز پیاده‌سازی نشده‌اند طراحی شده،
-اما با هر ``torch.nn.Module`` که یک زیرماژول attention-مانند دارد کار می‌کند.
+A model-agnostic tool that captures the weights of Attention layers via a forward hook
+during a real forward pass, without requiring changes to the model architecture. Designed for use in
+Units 2 and 3 (MPNN+Attention, Transformer+GNN) that are not yet implemented,
+but it works with any ``torch.nn.Module`` that has an attention-like submodule.
 
 See docs/SRS.md §4.7 (FR-09).
 """
@@ -16,7 +16,7 @@ try:
     from torch import nn
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
-        "پکیج 'torch' نصب نیست. با «pip install torch» یا از طریق requirements.txt نصب کنید."
+        "Package 'torch' is not installed. Install it with «pip install torch» or via requirements.txt."
     ) from exc
 
 import numpy as np
@@ -24,17 +24,17 @@ import numpy as np
 
 class AttentionExtractor:
     """
-    ثبت forward hook روی یک یا چند لایه از مدل و گرفتن خروجی وزن‌های Attention آن‌ها
-    در حین اجرای واقعی مدل، بدون تغییر کد مدل.
+    Register a forward hook on one or more layers of the model and capture their Attention weights
+    during a real model run, without changing the model code.
 
-    مثال:
+    Example:
         with AttentionExtractor(model, ["gnn.attn_layer"]) as extractor:
             attn_weights = extractor.extract(batch)
     """
 
     def __init__(self, model: "nn.Module", attention_layer_names: List[str]):
         if not attention_layer_names:
-            raise ValueError("attention_layer_names نباید خالی باشد")
+            raise ValueError("attention_layer_names must not be empty")
 
         self.model = model
         self._captured: Dict[str, "torch.Tensor"] = {}
@@ -45,20 +45,20 @@ class AttentionExtractor:
             module = named_modules.get(name)
             if module is None:
                 raise ValueError(
-                    f"لایه '{name}' در مدل یافت نشد. لایه‌های موجود: {list(named_modules)}"
+                    f"Layer '{name}' not found in the model. Available layers: {list(named_modules)}"
                 )
             self._handles.append(module.register_forward_hook(self._make_hook(name)))
 
     def _make_hook(self, name: str):
         def hook(_module, _inputs, output):
-            # بسیاری از لایه‌های Attention یک تاپل (خروجی، وزن‌های attention) برمی‌گردانند
+            # Many Attention layers return a tuple (output, attention weights)
             attn = output[1] if isinstance(output, tuple) and len(output) > 1 else output
             self._captured[name] = attn.detach()
 
         return hook
 
     def extract(self, *forward_args, **forward_kwargs) -> Dict[str, np.ndarray]:
-        """اجرای یک forward pass واقعی و بازگرداندن وزن‌های attention گرفته‌شده."""
+        """Run a real forward pass and return the captured attention weights."""
         self._captured.clear()
         was_training = self.model.training
         self.model.eval()
@@ -70,8 +70,8 @@ class AttentionExtractor:
 
         if not self._captured:
             raise RuntimeError(
-                "هیچ وزن attention‌ای گرفته نشد — بررسی کنید نام لایه‌ها درست باشد و "
-                "خروجی forward آن‌ها شامل وزن‌های attention باشد."
+                "No attention weights were captured — check that the layer names are correct and "
+                "that their forward output includes attention weights."
             )
         return {name: tensor.cpu().numpy() for name, tensor in self._captured.items()}
 

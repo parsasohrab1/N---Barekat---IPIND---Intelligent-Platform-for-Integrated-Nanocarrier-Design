@@ -1,10 +1,10 @@
 """
-تفسیرپذیری مبتنی بر SHAP (SHapley Additive exPlanations)
+SHAP-based interpretability (SHapley Additive exPlanations)
 
-یک لایه نازک و model-agnostic روی کتابخانه ``shap`` که خروجی آن را به ساختارهای
-داده‌ای ساده (dataclass) تبدیل می‌کند تا مستقل از نوع مدل زیرین (GNN، Transformer،
-مدل‌های کلاسیک sklearn) در واحدهای پیش‌بینی فیزیکوشیمیایی/زیستی (FR-02، FR-03)
-قابل استفاده باشد.
+A thin, model-agnostic layer over the ``shap`` library that converts its output to simple
+data structures (dataclass) so it can be used independently of the underlying model type (GNN, Transformer,
+classical sklearn models) in the physicochemical/biological prediction units (FR-02, FR-03)
+.
 
 See docs/SRS.md §4.7 (FR-09).
 """
@@ -19,13 +19,13 @@ try:
     import shap
 except ImportError as exc:  # pragma: no cover - exercised only when shap is missing
     raise ImportError(
-        "پکیج 'shap' نصب نیست. با «pip install shap» یا از طریق requirements.txt نصب کنید."
+        "Package 'shap' is not installed. Install it with «pip install shap» or via requirements.txt."
     ) from exc
 
 
 @dataclass
 class FeatureAttribution:
-    """سهم یک ویژگی ورودی در یک پیش‌بینی مشخص."""
+    """Contribution of one input feature to a specific prediction."""
 
     feature: str
     shap_value: float
@@ -33,14 +33,14 @@ class FeatureAttribution:
 
 @dataclass
 class ExplanationResult:
-    """تفسیر کامل یک پیش‌بینی: مقدار پایه + سهم هر ویژگی."""
+    """Full interpretation of a prediction: base value + contribution of each feature."""
 
     prediction: float
     base_value: float
     attributions: List[FeatureAttribution] = field(default_factory=list)
 
     def top_features(self, n: int = 5) -> List[FeatureAttribution]:
-        """بازگرداندن n ویژگی با بیشترین قدر مطلق سهم (مهم‌ترین‌ها)."""
+        """Return the n features with the largest absolute contribution (most important)."""
         return sorted(self.attributions, key=lambda a: abs(a.shap_value), reverse=True)[:n]
 
     def to_dict(self) -> dict:
@@ -53,10 +53,10 @@ class ExplanationResult:
 
 class SHAPExplainer:
     """
-    تفسیرگر SHAP برای یک مدل با خروجی اسکالر (یک ویژگی هدف).
+    SHAP explainer for a model with scalar output (one target property).
 
-    برای مدل‌هایی که هم‌زمان چند ویژگی پیش‌بینی می‌کنند (مثل GNN چندوظیفه‌ای واحد ۲)،
-    یک نمونه جدا برای هر ویژگی خروجی بسازید یا از ``explain_multi_output`` استفاده کنید.
+    For models that predict several properties simultaneously (like the multi-task GNN of Unit 2),
+    build a separate instance for each output property or use ``explain_multi_output``.
     """
 
     def __init__(
@@ -69,16 +69,16 @@ class SHAPExplainer:
     ):
         """
         Args:
-            predict_fn: تابعی که یک آرایه/DataFrame (n_samples, n_features) می‌گیرد و
-                بردار پیش‌بینی (n_samples,) برمی‌گرداند.
-            background_data: داده مرجع برای تخمین مقدار پایه (base value)؛ برای مدل‌های
-                بزرگ توصیه می‌شود یک نمونه کوچک (<=100 ردیف) داده شود.
-            feature_names: نام ستون‌ها؛ اگر ندهید از ستون‌های background_data خوانده می‌شود.
-            algorithm: الگوریتم shap ('auto', 'permutation', 'exact', ...).
-            max_background_samples: حداکثر تعداد نمونه پس‌زمینه برای کنترل هزینه محاسباتی.
+            predict_fn: a function that takes an array/DataFrame (n_samples, n_features) and
+                returns a prediction vector (n_samples,).
+            background_data: reference data for estimating the base value; for large
+                models a small sample (<=100 rows) is recommended.
+            feature_names: column names; if not given, read from the columns of background_data.
+            algorithm: shap algorithm ('auto', 'permutation', 'exact', ...).
+            max_background_samples: maximum number of background samples to control computational cost.
         """
         if len(background_data) == 0:
-            raise ValueError("background_data نباید خالی باشد")
+            raise ValueError("background_data must not be empty")
 
         self.feature_names = list(feature_names or background_data.columns)
         self._predict_fn = predict_fn
@@ -89,7 +89,7 @@ class SHAPExplainer:
         self._explainer = shap.Explainer(predict_fn, background, algorithm=algorithm)
 
     def explain(self, X: pd.DataFrame) -> List[ExplanationResult]:
-        """محاسبه تفسیر SHAP برای هر ردیف در X."""
+        """Compute the SHAP explanation for each row in X."""
         if list(X.columns) != self.feature_names:
             X = X[self.feature_names]
 
@@ -121,19 +121,19 @@ def explain_multi_output(
     algorithm: str = "auto",
 ) -> dict:
     """
-    تفسیر SHAP برای یک مدل چندوظیفه‌ای (Multi-Task) با ساختن یک explainer برای هر
-    ویژگی خروجی — مطابق نیاز واحد پیش‌بینی فیزیکوشیمیایی (FR-02) که به‌طور هم‌زمان
-    ≥۷ ویژگی پیش‌بینی می‌کند.
+    SHAP explanation for a multi-task model by building one explainer for each
+    output property — per the need of the physicochemical prediction unit (FR-02) which simultaneously predicts
+    ≥7 properties.
 
     Args:
-        predict_fn_per_target: نگاشت نام ویژگی هدف -> تابع پیش‌بینی اسکالر برای همان ویژگی.
-        background_data: داده پس‌زمینه مشترک بین همه ویژگی‌ها.
-        X: نمونه‌هایی که باید تفسیر شوند.
-        feature_names: نام ستون‌های ورودی.
-        algorithm: الگوریتم shap.
+        predict_fn_per_target: mapping target property name -> scalar prediction function for that property.
+        background_data: background data shared among all properties.
+        X: samples to be explained.
+        feature_names: input column names.
+        algorithm: shap algorithm.
 
     Returns:
-        نگاشت نام ویژگی هدف -> فهرست ExplanationResult (یکی به ازای هر ردیف در X).
+        Mapping target property name -> list of ExplanationResult (one per row in X).
     """
     results = {}
     for target_name, predict_fn in predict_fn_per_target.items():

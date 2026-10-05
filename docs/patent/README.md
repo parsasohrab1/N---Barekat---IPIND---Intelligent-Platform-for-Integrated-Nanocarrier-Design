@@ -1,13 +1,13 @@
 # Patent material — restricted access
 
-فایل `patentability_analysis.md.gpg` حاوی تحلیل قابلیت ثبت اختراع، استراتژی ادعانامه و مقایسه رقابتی است و **با AES-256 رمزگذاری شده** (`gpg --symmetric --cipher-algo AES256`). نسخه متنی آن هرگز کامیت نمی‌شود (نگاه کنید به `.gitignore` ریشه پروژه).
+The file `patentability_analysis.md.gpg` contains the patentability analysis, claims strategy and competitive comparison and is **encrypted with AES-256** (`gpg --symmetric --cipher-algo AES256`). Its plain-text version is never committed (see the project root `.gitignore`).
 
-فقط دارندگان پس‌واژه (مالک/مخترعان اصلی) می‌توانند آن را باز کنند:
+Only passphrase holders (the owner/original inventors) can open it:
 
 ```bash
 gpg -d docs/patent/patentability_analysis.md.gpg > docs/patent/patentability_analysis.md
 ```
 
-پس‌واژه از طریق یک کانال جدا (نه در این ریپو) در اختیار افراد مجاز قرار می‌گیرد. سایر اعضای تیم که پس‌واژه ندارند فقط این فایل باینری رمزشده را می‌بینند و محتوای آن برایشان قابل خواندن نیست.
+The passphrase is shared with authorized people through a separate channel (not in this repo). Other team members without the passphrase see only this encrypted binary file and cannot read its content.
 
-⚠️ پس از باز کردن، فایل متنی `patentability_analysis.md` را کامیت نکنید — `.gitignore` آن را نادیده می‌گیرد اما مراقب باشید به‌صورت دستی force-add نشود.
+⚠️ After opening, do not commit the plain-text file `patentability_analysis.md` — `.gitignore` ignores it, but be careful it is not force-added manually.

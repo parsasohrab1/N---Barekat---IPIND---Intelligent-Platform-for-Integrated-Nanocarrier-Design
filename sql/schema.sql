@@ -1,7 +1,7 @@
 -- IPIND² database schema
 -- See docs/SRS.md section 5.2 for context.
 
--- جدول مولکول‌ها
+-- Molecules table
 CREATE TABLE molecules (
     id SERIAL PRIMARY KEY,
     smiles TEXT NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE molecules (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- جدول ویژگی‌های فیزیکوشیمیایی
+-- Physicochemical properties table
 CREATE TABLE physicochemical_properties (
     id SERIAL PRIMARY KEY,
     molecule_id INTEGER REFERENCES molecules(id),
@@ -32,7 +32,7 @@ CREATE TABLE physicochemical_properties (
     model_version VARCHAR(64)
 );
 
--- جدول ویژگی‌های زیستی
+-- Biological properties table
 CREATE TABLE biological_properties (
     id SERIAL PRIMARY KEY,
     molecule_id INTEGER REFERENCES molecules(id),
@@ -45,7 +45,7 @@ CREATE TABLE biological_properties (
     model_version VARCHAR(64)
 );
 
--- جدول نتایج آزمایشگاهی (برای بازخورد)
+-- Lab results table (for feedback)
 CREATE TABLE experimental_results (
     id SERIAL PRIMARY KEY,
     molecule_id INTEGER REFERENCES molecules(id),

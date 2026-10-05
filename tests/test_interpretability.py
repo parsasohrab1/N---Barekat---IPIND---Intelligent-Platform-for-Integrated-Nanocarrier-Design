@@ -52,7 +52,7 @@ def linear_regression_setup():
             "tpsa": rng.uniform(20, 150, size=40),
         }
     )
-    # هدف کاملاً خطی و وابسته به mol_weight تا اهمیت ویژگی قابل پیش‌بینی باشد
+    # Fully linear target dependent on mol_weight so that feature importance is predictable
     y = 0.1 * X["mol_weight"] + rng.normal(0, 0.01, size=40)
 
     from sklearn.linear_model import LinearRegression
@@ -110,7 +110,7 @@ def test_explain_multi_output(linear_regression_setup):
 
 
 class _ToyAttentionLayer(nn.Module):
-    """لایه ساختگی که یک تاپل (خروجی، وزن‌های attention) برمی‌گرداند، مثل nn.MultiheadAttention."""
+    """Dummy layer that returns a tuple (output, attention weights), like nn.MultiheadAttention."""
 
     def forward(self, x):
         weights = torch.softmax(x.sum(dim=-1, keepdim=True).expand(-1, x.shape[1]), dim=-1)

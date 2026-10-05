@@ -1,4 +1,4 @@
-"""ساختار داده نتیجه آزمایشگاهی، منطبق بر جدول experimental_results در sql/schema.sql."""
+"""Lab result data structure, matching the experimental_results table in sql/schema.sql."""
 
 from dataclasses import dataclass
 from datetime import date
@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 @dataclass
 class ExperimentalResult:
-    """یک رکورد بازخورد آزمایشگاهی، معادل یک سطر از جدول ``experimental_results``."""
+    """A lab feedback record, equivalent to one row of the ``experimental_results`` table."""
 
     molecule_id: int
     experimental_size_nm: Optional[float] = None
@@ -20,7 +20,7 @@ class ExperimentalResult:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ExperimentalResult":
         if "molecule_id" not in data or data["molecule_id"] in (None, ""):
-            raise ValueError("رکورد آزمایشگاهی بدون molecule_id قابل قبول نیست")
+            raise ValueError("A lab record without molecule_id is not acceptable")
 
         exp_date = data.get("experimental_date")
         if isinstance(exp_date, str) and exp_date:
