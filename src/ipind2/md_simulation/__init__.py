@@ -9,6 +9,7 @@ from .analysis import (
     sasa_trajectory,
 )
 from .engines import (
+    CondaOpenMMEngine,
     ConformerEnsembleEngine,
     GromacsEngine,
     MDEngine,
@@ -35,6 +36,7 @@ __all__ = [
     "Trajectory",
     "MDEngine",
     "MDEngineUnavailable",
+    "CondaOpenMMEngine",
     "ConformerEnsembleEngine",
     "GromacsEngine",
     "OpenMMEngine",

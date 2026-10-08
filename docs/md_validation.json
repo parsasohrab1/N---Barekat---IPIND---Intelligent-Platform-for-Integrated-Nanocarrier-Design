@@ -1,0 +1,67 @@
+{
+  "complete": false,
+  "required_ns": 100.0,
+  "requested_ns": 2.0,
+  "model": "OpenFF 2.2.0 (Sage) + Gasteiger charges + OBC2 implicit solvent; single solute; Langevin 310 K, 2 fs",
+  "limitations": [
+    "single molecule in implicit solvent: no self-assembly, no bilayer/particle, no binding free energy",
+    "Gasteiger charges instead of AM1-BCC (AmberTools unavailable on Windows)",
+    "CHARMM36/OPLS-AA are not used; no MM-GBSA"
+  ],
+  "candidates": [
+    {
+      "smiles": "CCCCCCCCCCCCCCCCCCCCCCC(=O)OCC(OC(=O)CCCCCCCCCC=CCCCCCCC)COP(=O)(O)OCCOCCOCCO",
+      "n_atoms": 162,
+      "simulated_ns": 2.0,
+      "n_frames": 200,
+      "rg_mean_A": 5.8360881356076675,
+      "rg_std_A": 0.3184938226495596,
+      "sasa_mean_A2": 1217.1199190871855,
+      "order_parameter": 0.015480975466237454,
+      "potential_energy_mean_kcal": 221.84760381911042,
+      "stable": true,
+      "meets_100ns": false,
+      "ns_per_day": 136.91690072577836,
+      "wall_seconds": 1394.5,
+      "platform": "OpenCL"
+    },
+    {
+      "smiles": "CCCCCCCCCCCCCCCCCCCCCCCCN(CCCCCCCCCCCCCCCCCCCC)CCN(CCCCCCCCCCC=CCCCCCCCC)CCN(C)C",
+      "n_atoms": 216,
+      "simulated_ns": 2.0,
+      "n_frames": 200,
+      "rg_mean_A": 6.299237847423378,
+      "rg_std_A": 0.31671720471039083,
+      "sasa_mean_A2": 1393.6612012018727,
+      "order_parameter": 0.006257664869618414,
+      "potential_energy_mean_kcal": 263.474202882267,
+      "stable": true,
+      "meets_100ns": false,
+      "ns_per_day": 124.59284128385605,
+      "wall_seconds": 1586.4,
+      "platform": "OpenCL"
+    },
+    {
+      "smiles": "CCCCCCCCCCCCCCCCCCCCCCCN(CCCCCCCCCCCCCCCCCCC(C)C)CCN(CCCCCCCCCCCCCCCCCCC(C)C)CCN(C)C",
+      "n_atoms": 221,
+      "simulated_ns": 2.0,
+      "n_frames": 200,
+      "rg_mean_A": 6.486139093475617,
+      "rg_std_A": 0.46591851791640476,
+      "sasa_mean_A2": 1419.035043958791,
+      "order_parameter": 0.0074683341655916394,
+      "potential_energy_mean_kcal": 280.71931647720885,
+      "stable": true,
+      "meets_100ns": false,
+      "ns_per_day": 143.70186637222233,
+      "wall_seconds": 1536.2,
+      "platform": "OpenCL"
+    }
+  ],
+  "failures": [],
+  "total_wall_seconds": 37943.7,
+  "host": {
+    "cpu_count": 8
+  },
+  "note": "First campaign run: candidate 3 crashed while writing its output file (machine slept; wall time includes ~9 h of suspension); it was re-run separately with identical settings and merged."
+}

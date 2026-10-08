@@ -197,3 +197,108 @@ class TestEngineAdapters:
     def test_xtb_unavailable(self):
         with pytest.raises(MDEngineUnavailable):
             XTBRefiner(executable="definitely-not-installed-xtb").single_point_kcal("CCO")
+
+
+class TestCondaOpenMMEngine:
+    """Real-MD engine via a separate conda env. Unit tests mock the runner; one integration test runs it for real."""
+
+    MD_PYTHON = "C:/Users/asus/miniforge3/envs/ipind-md/python.exe"
+
+    def test_unavailable_without_env(self, monkeypatch):
+        from ipind2.md_simulation import CondaOpenMMEngine
+
+        monkeypatch.delenv("IPIND_MD_PYTHON", raising=False)
+        engine = CondaOpenMMEngine()
+        assert not engine.available()
+        with pytest.raises(MDEngineUnavailable, match="IPIND_MD_PYTHON"):
+            engine.simulate("CCO", duration_ns=0.01)
+
+    def _fake_run(self, tmp_path, returncode=0, stdout="", ns=0.5, finite=True):
+        import json as _json
+        from types import SimpleNamespace
+
+        def run(command, **kwargs):
+            if returncode == 0:
+                out = command[command.index("--out") + 1]
+                coords = np.random.default_rng(0).normal(size=(4, 3, 3)).astype(np.float32)
+                meta = {"simulated_ns": ns, "finite": finite, "ns_per_day": 100.0}
+                np.savez_compressed(out, coords=coords, energies=np.array([1.0, 2.0, 3.0, 4.0]),
+                                    elements=np.array(["C", "C", "O"]), bonds=np.array([[0, 1], [1, 2]], dtype=np.int32),
+                                    meta=_json.dumps(meta))
+            return SimpleNamespace(returncode=returncode, stdout=stdout, stderr="boom")
+
+        return run
+
+    def test_parses_trajectory_and_reports_actual_simulated_time(self, tmp_path, monkeypatch):
+        from ipind2.md_simulation import CondaOpenMMEngine
+
+        python = tmp_path / "python.exe"
+        python.write_text("x")
+        monkeypatch.setattr(subprocess, "run", self._fake_run(tmp_path, ns=0.5))
+        trajectory = CondaOpenMMEngine(python=str(python)).simulate("CCO", duration_ns=100.0)
+        assert trajectory.fidelity == "md" and trajectory.simulated_ns == 0.5  # actual, not requested
+        assert trajectory.coords.shape == (4, 3, 3) and trajectory.bonds == [(0, 1), (1, 2)]
+        result = analyze_trajectory(trajectory)
+        assert result.is_real_md and not result.meets_sim_time, "0.5 ns of real MD must not satisfy the 100 ns requirement"
+
+    def test_full_length_run_satisfies_requirement(self, tmp_path, monkeypatch):
+        from ipind2.md_simulation import CondaOpenMMEngine
+
+        python = tmp_path / "python.exe"
+        python.write_text("x")
+        monkeypatch.setattr(subprocess, "run", self._fake_run(tmp_path, ns=100.0))
+        trajectory = CondaOpenMMEngine(python=str(python)).simulate("CCO")
+        assert analyze_trajectory(trajectory).meets_sim_time
+
+    def test_unsupported_chemistry_is_skipped_not_fatal(self, tmp_path, monkeypatch):
+        from ipind2.md_simulation import CondaOpenMMEngine
+
+        python = tmp_path / "python.exe"
+        python.write_text("x")
+        monkeypatch.setattr(subprocess, "run", self._fake_run(tmp_path, returncode=3, stdout='{"error": "elements without Sage parameters: [\'Au\']"}'))
+        report = validate_candidates(["OCCS[Au]"], CondaOpenMMEngine(python=str(python)))
+        assert report.skipped == ["OCCS[Au]"] and not report.md_complete
+
+    def test_runner_crash_surfaces_as_error(self, tmp_path, monkeypatch):
+        from ipind2.md_simulation import CondaOpenMMEngine
+
+        python = tmp_path / "python.exe"
+        python.write_text("x")
+        monkeypatch.setattr(subprocess, "run", self._fake_run(tmp_path, returncode=1))
+        with pytest.raises(RuntimeError, match="MD runner failed"):
+            CondaOpenMMEngine(python=str(python)).simulate("CCO", duration_ns=0.01)
+
+    def test_blown_up_simulation_rejected(self, tmp_path, monkeypatch):
+        from ipind2.md_simulation import CondaOpenMMEngine
+
+        python = tmp_path / "python.exe"
+        python.write_text("x")
+        monkeypatch.setattr(subprocess, "run", self._fake_run(tmp_path, finite=False))
+        with pytest.raises(RuntimeError, match="non-finite"):
+            CondaOpenMMEngine(python=str(python)).simulate("CCO", duration_ns=0.01)
+
+    @pytest.mark.skipif(not __import__("os").path.exists(MD_PYTHON), reason="MD conda env (ipind-md) not installed")
+    def test_integration_real_openmm_run(self):
+        """Actually runs OpenMM (≈0.02 ns): finite energies, plausible geometry, honest time accounting."""
+        from ipind2.md_simulation import CondaOpenMMEngine
+
+        engine = CondaOpenMMEngine(python=self.MD_PYTHON, platform="CPU", report_ps=5.0, equil_ps=5.0)
+        trajectory = engine.simulate("CCCCCCCCCCCC[N+](C)(C)C", duration_ns=0.02)
+        assert trajectory.fidelity == "md" and trajectory.simulated_ns == pytest.approx(0.02, abs=0.006)
+        assert np.isfinite(trajectory.coords).all() and np.isfinite(trajectory.energies_kcal).all()
+        # bonded geometry stays physical: C-C bonds ~1.5 Å in every frame
+        carbon_bonds = [(i, j) for i, j in trajectory.bonds if trajectory.elements[i] == "C" and trajectory.elements[j] == "C"]
+        lengths = np.linalg.norm(trajectory.coords[:, [j for _, j in carbon_bonds]] - trajectory.coords[:, [i for i, _ in carbon_bonds]], axis=2)
+        assert 1.3 < lengths.mean() < 1.7 and lengths.max() < 2.0
+        report = analyze_trajectory(trajectory)
+        assert report.is_real_md and not report.meets_sim_time and report.rg_mean > 0
+
+    def test_unsupported_element_real_runner(self):
+        import os
+
+        if not os.path.exists(self.MD_PYTHON):
+            pytest.skip("MD conda env (ipind-md) not installed")
+        from ipind2.md_simulation import CondaOpenMMEngine
+
+        with pytest.raises(ValueError, match="Sage"):
+            CondaOpenMMEngine(python=self.MD_PYTHON, platform="CPU").simulate("OCCS[Au]", duration_ns=0.01)

@@ -72,6 +72,7 @@ def assess(
     history_path: Optional[str] = None,
     attestations_path: Optional[str] = None,
     public_benchmark_path: Optional[str] = None,
+    md_validation_path: Optional[str] = None,
     real_lab_results: int = 0,
     real_lab_improved_holdout: bool = False,
     test_suite_passed: Optional[bool] = None,
@@ -81,6 +82,7 @@ def assess(
         report_path: output of ``ipind2.training.validate``.
         history_path: benchmark history (``BenchmarkHistory``).
         public_benchmark_path: output of ``ipind2.benchmarking.public`` (real public dataset).
+        md_validation_path: output of ``ipind2.md_simulation.campaign`` (real MD runs).
         attestations_path: signed manual attestation of the non-automatic criteria.
         real_lab_results: number of **real lab results** (not synthetic) recorded in the database.
         real_lab_improved_holdout: whether one update round reduced the error on a real holdout.
@@ -124,9 +126,18 @@ def assess(
     else:
         ok, evidence = False, "Public benchmark report (public_benchmark.json) not available"
     add("R2", 5, "On a real public dataset, platform R² ≥ simple baseline (RandomForest+Morgan)", "auto", ok, evidence)
-    md_real = bool(report.get("md_real_validation", {}).get("complete"))
-    add("R3", 5, "Real MD validation (≥100 ns, MD engine) for candidates", "auto", md_real,
-        "md_real_validation.complete" if md_real else "Only conformer sampling; MD engine not run")
+    md = _load(md_validation_path) or report.get("md_real_validation") or {}
+    md_real = bool(md.get("complete"))
+    if md:
+        rows = md.get("candidates", [])
+        longest = max((r.get("simulated_ns", 0) for r in rows), default=0)
+        md_evidence = (
+            f"{len(rows)} candidates, real MD, longest {longest:g} ns of the required {md.get('required_ns', 100):g} ns"
+            + ("" if md_real else " — below the requirement")
+        )
+    else:
+        md_evidence = "Only conformer sampling; no MD report"
+    add("R3", 5, "Real MD validation (≥100 ns, MD engine) for candidates", "auto", md_real, md_evidence)
     add("R4", 5, f"Lab loop: ≥{MIN_REAL_LAB_RESULTS} real results and improvement on a real holdout", "auto",
         real_lab_results >= MIN_REAL_LAB_RESULTS and real_lab_improved_holdout,
         f"{real_lab_results} real results; holdout improvement={'yes' if real_lab_improved_holdout else 'no/not measured'}")
@@ -161,12 +172,13 @@ def main() -> int:
     parser.add_argument("--history", default="benchmarks/history.json")
     parser.add_argument("--attestations", default="docs/trl_attestations.json")
     parser.add_argument("--public-benchmark", default="docs/public_benchmark.json")
+    parser.add_argument("--md-validation", default="docs/md_validation.json")
     parser.add_argument("--tests-passed", choices=["yes", "no"], default=None)
     parser.add_argument("--real-lab-results", type=int, default=0)
     parser.add_argument("--real-lab-improved", action="store_true")
     args = parser.parse_args()
     result = assess(
-        args.report, args.history, args.attestations, args.public_benchmark, args.real_lab_results, args.real_lab_improved,
+        args.report, args.history, args.attestations, args.public_benchmark, args.md_validation, args.real_lab_results, args.real_lab_improved,
         None if args.tests_passed is None else args.tests_passed == "yes",
     )
     print(result.to_markdown())

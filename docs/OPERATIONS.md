@@ -59,3 +59,22 @@ Record results with `POST /lab/results` (or `lab_automation` CSV/REST); `POST /a
 - A single API process runs design work on a thread pool (default 2); for more concurrency add multiple replicas with a work queue (Celery/RQ) — the current code has no distributed queue.
 - The rate limiter is only account lockout after 5 failed logins; apply IP limiting in nginx/WAF.
 - NFR-07 (99.9% availability) depends on infrastructure (multiple replicas, replicated DB, health checks) and is not provable by code.
+
+## Real MD environment (FR-05)
+
+The main environment does not need OpenMM. Real MD runs in a separate conda env that `CondaOpenMMEngine` calls through `src/ipind2/md_simulation/openmm_runner.py`:
+
+```bash
+conda create -n ipind-md -c conda-forge python=3.11 openmm openff-toolkit-base \
+    openff-interchange-base openff-forcefields rdkit numpy
+export IPIND_MD_PYTHON=/path/to/miniforge3/envs/ipind-md/python    # python.exe on Windows
+python -m ipind2.md_simulation.campaign --model-dir models/v1 --n 3 --ns 100 --platform OpenCL --out docs/md_validation.json
+```
+
+What this MD is, and is not:
+
+- OpenFF 2.2.0 "Sage" force field, **Gasteiger** partial charges, **OBC2 implicit solvent**, one solute molecule, Langevin 310 K, 2 fs.
+- Not CHARMM36/OPLS-AA, no explicit water, no self-assembled particle, no MM-GBSA. AmberTools (AM1-BCC charges, GAFF) has no Windows conda build, so `openmmforcefields` was not usable on Windows; on Linux/macOS, AM1-BCC charges are preferable.
+- Elements without Sage parameters (Au, Fe, Si, Zn, ...) are rejected cleanly and reported as skipped.
+- Throughput measured on this project's laptop (8 CPU cores, MX450 via OpenCL), 162–221-atom lipids: **65–116 ns/day**, so 100 ns per candidate takes about 1–1.5 days. Plan the full requirement on a GPU server or cloud GPU.
+- `docs/md_validation.json` has `complete: true` only if every candidate ran on a real engine for at least 100 ns; the TRL assessor (criterion R3) reads exactly that flag.

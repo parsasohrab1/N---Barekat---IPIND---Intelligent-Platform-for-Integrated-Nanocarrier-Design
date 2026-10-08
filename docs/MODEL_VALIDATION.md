@@ -29,7 +29,7 @@ PDI (R² 0.92) and loading content (0.79; ceiling 0.81) are not among the R² > 
 | NFR-07 | Availability 99.9% | Not provable by code (infrastructure) | — |
 | NFR-09 | Quasi-quantum < 1 kcal/mol | Only an xtb adapter; accuracy not measured | ❌ Not validated |
 
-The NFR-06 measurement **does not include MD** (real MD has not been run).
+The NFR-06 measurement **does not include MD**.
 
 ## Benchmark on real public data
 
@@ -61,9 +61,30 @@ Paired over the 5 splits: GNN+Morgan beats the RandomForest on **5 of 5** splits
 
 Reproduce: `python -m ipind2.benchmarking.public` (output: `docs/public_benchmark.json` with per-split results, recorded in `benchmarks/history.json`).
 
+## Real MD runs (FR-05, criterion R3)
+
+Engine: OpenMM 8.6.1 in a separate conda env (`ipind-md`), OpenCL on the laptop GPU (MX450). Model: **OpenFF 2.2.0 "Sage" force field, Gasteiger partial charges, OBC2 implicit solvent**, one solute molecule, Langevin 310 K, 2 fs, 100 ps equilibration, frames every 10 ps. The three top pipeline candidates (lipid query, `release` bundle) were simulated for **2 ns each**:
+
+| # | Atoms | Simulated (ns) | Rg (Å) | SASA (Å²) | S₂ (C–C) | ns/day | Stable |
+|---|---|---|---|---|---|---|---|
+| 1 | 162 | 2 | 5.84 ± 0.32 | 1217 | 0.015 | 137 | ✅ |
+| 2 | 216 | 2 | 6.30 ± 0.32 | 1394 | 0.006 | 125 | ✅ |
+| 3 | 221 | 2 | 6.49 ± 0.47 | 1419 | 0.007 | 144 | ✅ |
+
+(Report: `docs/md_validation.json`; reproduce with `python -m ipind2.md_simulation.campaign`. "Stable" = Rg coefficient of variation < 0.35, a crude screen, not a chemical threshold. Candidate 3 crashed on its first attempt while writing its output file — the machine slept — and was re-run with identical settings.)
+
+**What this does show:** the engine integration works on real pipeline output; geometries stay physical (C–C bonds ≈ 1.5 Å, tested), energies are finite and the molecules do not blow up; throughput is 125–144 ns/day, so 100 ns takes about 17–19 hours per candidate here.
+
+**What it does not show:**
+- **Not 100 ns** — 2 ns is 2% of the requirement, so `complete = false` and criterion R3 stays unmet.
+- Not CHARMM36/OPLS-AA, not explicit water, no self-assembled particle or bilayer, no binding free energy / MM-GBSA. A single flexible chain in implicit solvent mostly collapses/relaxes; Rg and SASA from it say little about nanoparticle stability.
+- Gasteiger charges are cruder than AM1-BCC (AmberTools has no Windows build), so electrostatics for charged/polar heads is less reliable.
+- Metals (Au, Fe, Si, ...) are rejected: Sage has no parameters for them.
+- Only 3 candidates from one query; no comparison against experiment.
+
 ## Requirements without full validation
 
-- **FR-05 (MD ≥ 100 ns, CHARMM36):** The MD engine was not installed. Trajectory analysis (Rg, SASA, S₂, MM-GBSA) was tested with an analytical answer; RDKit conformer sampling is labeled `fidelity="conformer_ensemble"` and never sets `md_complete` to `True`. The OpenMM adapter has not been run.
+- **FR-05 (MD ≥ 100 ns, CHARMM36):** partially validated — see "Real MD runs" below: real MD works end to end, but only 2 ns per candidate (not 100 ns), with Sage/Gasteiger/implicit solvent instead of CHARMM36/OPLS-AA explicit solvent.
 - **FR-12 comparison with papers:** `published_results.json` must be filled with real citations; we have not supplied any number of our own.
 
 ## Validation findings that changed the code
@@ -89,7 +110,7 @@ Under severe distribution shift (model trained on lipids, new data polymer, 30 r
 python -m ipind2.training.train --profile release --out models/v1     # ~35 minutes on CPU
 python -m ipind2.training.validate --model-dir models/v1 --out docs/validation_report.json --seed-library
 python -m ipind2.trl --tests-passed yes
-pytest -q                                                              # 334 tests
+pytest -q                                                              # 345 tests
 ```
 
 ## Trusting the tests

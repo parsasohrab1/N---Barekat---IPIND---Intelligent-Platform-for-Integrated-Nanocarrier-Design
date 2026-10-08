@@ -84,3 +84,25 @@ def test_too_few_real_lab_results_do_not_count(tmp_path):
 def test_markdown_lists_every_criterion(tmp_path):
     text = assess(_write(tmp_path, "r.json", GOOD_REPORT), None, test_suite_passed=True).to_markdown()
     assert all(f"| {i}:" in text or f"{i}:" in text for i in ("T1", "T2", "T3", "R1", "R2", "R3", "R4", "R5", "R6"))
+
+
+def _md(tmp_path, complete, ns):
+    return _write(tmp_path, "md.json", {"complete": complete, "required_ns": 100.0,
+                                         "candidates": [{"simulated_ns": ns}, {"simulated_ns": ns}]})
+
+
+def test_short_real_md_does_not_satisfy_r3(tmp_path):
+    """Real MD of 2 ns is real, but is not the 100 ns the SRS requires."""
+    result = assess(_write(tmp_path, "r.json", GOOD_REPORT), None, md_validation_path=_md(tmp_path, False, 2.0), test_suite_passed=True)
+    r3 = next(c for c in result.criteria if c.id == "R3")
+    assert not r3.met and "2 ns" in r3.evidence and "below" in r3.evidence
+
+
+def test_complete_md_report_satisfies_r3(tmp_path):
+    result = assess(_write(tmp_path, "r.json", GOOD_REPORT), None, md_validation_path=_md(tmp_path, True, 100.0), test_suite_passed=True)
+    assert next(c for c in result.criteria if c.id == "R3").met
+
+
+def test_missing_md_report_does_not_satisfy_r3(tmp_path):
+    result = assess(_write(tmp_path, "r.json", GOOD_REPORT), None, md_validation_path=str(tmp_path / "none.json"), test_suite_passed=True)
+    assert not next(c for c in result.criteria if c.id == "R3").met

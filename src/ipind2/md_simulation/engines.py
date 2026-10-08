@@ -290,9 +290,94 @@ class OpenMMEngine:
         )
 
 
+class CondaOpenMMEngine:
+    """
+    Real MD through OpenMM running in a *separate* conda environment (``ipind-md``).
+
+    The main environment does not need OpenMM; ``openmm_runner.py`` is executed with the MD env's Python
+    (``IPIND_MD_PYTHON`` or the ``python`` argument) and the trajectory is read back from an ``.npz`` file.
+
+    Model: OpenFF Sage + Gasteiger charges + OBC2 implicit solvent, single solute molecule (see the runner's
+    docstring for the limitations). Trajectories are labelled ``fidelity="md"`` with the *actual* simulated
+    time, so ``meets_sim_time`` is true only when the run really reached the required length.
+    """
+
+    name = "openmm-conda"
+
+    def __init__(
+        self,
+        python: Optional[str] = None,
+        platform: str = "OpenCL",
+        report_ps: float = 10.0,
+        equil_ps: float = 100.0,
+        timeout_s: Optional[float] = None,
+        seed: int = 7,
+    ):
+        import os
+
+        self.python = python or os.environ.get("IPIND_MD_PYTHON", "")
+        self.platform = platform
+        self.report_ps = report_ps
+        self.equil_ps = equil_ps
+        self.timeout_s = timeout_s
+        self.seed = seed
+
+    def available(self) -> bool:
+        return bool(self.python) and Path(self.python).exists()
+
+    def simulate(self, smiles: str, duration_ns: float = 100.0, **kwargs) -> Trajectory:
+        import json
+        import sys
+        import tempfile
+
+        if not self.available():
+            raise MDEngineUnavailable(
+                "MD conda environment not found; set IPIND_MD_PYTHON to its python executable "
+                "(conda create -n ipind-md -c conda-forge python=3.11 openmm openff-toolkit-base "
+                "openff-interchange-base openff-forcefields rdkit numpy)"
+            )
+        runner = Path(__file__).with_name("openmm_runner.py")
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "traj.npz"
+            command = [
+                self.python, str(runner), "--smiles", smiles, "--ns", str(duration_ns), "--out", str(out),
+                "--platform", kwargs.get("platform", self.platform), "--report-ps", str(self.report_ps),
+                "--equil-ps", str(self.equil_ps), "--seed", str(self.seed),
+            ]
+            result = subprocess.run(command, capture_output=True, text=True, timeout=self.timeout_s)
+            if result.returncode == 3:  # unsupported chemistry / invalid input (reported by the runner)
+                detail = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "unsupported input"
+                raise ValueError(f"MD not possible for {smiles!r}: {detail}")
+            if result.returncode != 0:
+                tail = (result.stderr or result.stdout)[-400:]
+                raise RuntimeError(f"MD runner failed (exit {result.returncode}): {tail}")
+            # read inside a ``with`` so the file handle is closed before the temp dir is removed (Windows)
+            with np.load(out, allow_pickle=False) as data:
+                meta = json.loads(str(data["meta"]))
+                coords = data["coords"].astype(float)
+                energies = data["energies"].astype(float)
+                elements = [str(e) for e in data["elements"]]
+                bonds = [(int(i), int(j)) for i, j in data["bonds"]]
+        if not meta.get("finite", False):
+            raise RuntimeError("MD trajectory contains non-finite values (simulation blew up)")
+        return Trajectory(
+            coords=coords,
+            elements=elements,
+            fidelity="md",
+            engine=self.name,
+            smiles=smiles,
+            energies_kcal=energies,
+            bonds=bonds,
+            simulated_ns=float(meta["simulated_ns"]),
+            metadata=meta,
+        )
+
+
 def available_engines(work_dir: str = ".") -> Sequence[str]:
     """Names of engines usable on this machine (the conformer set is always available)."""
     names = [ConformerEnsembleEngine.name]
+    if CondaOpenMMEngine().available():
+        names.append(CondaOpenMMEngine.name)
     if GromacsEngine(work_dir).available():
         names.append(GromacsEngine.name)
     try:
