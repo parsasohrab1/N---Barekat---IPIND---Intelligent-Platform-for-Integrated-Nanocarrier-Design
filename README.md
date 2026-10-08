@@ -33,7 +33,7 @@ tests/                    Tests
 | | |
 |---|---|
 | **TRL (computed from evidence)** | **4** — TRL 5 requires real data/MD/deployment; [`docs/TRL_ASSESSMENT.md`](docs/TRL_ASSESSMENT.md) states exactly what is missing |
-| Units 1–10 | Implemented and tested (345 tests); real MD is only an adapter |
+| Units 1–10 | Implemented and tested (345 tests); real MD (OpenMM) runs, but only 2 ns validated, not 100 ns |
 | Accuracy | On **synthetic data** — [`docs/MODEL_VALIDATION.md`](docs/MODEL_VALIDATION.md) |
 | Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Operations: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) · FAIR: [`docs/FAIR_MIRIBEL.md`](docs/FAIR_MIRIBEL.md) |
 
